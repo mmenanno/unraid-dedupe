@@ -207,9 +207,6 @@ class RmlintScanner:
         cmd = ['rmlint']
         cmd.extend(scan_paths)
 
-        for pattern in self.config.config.get('exclude_patterns', []):
-            cmd.extend(['--exclude', pattern])
-
         cmd.extend([
             f'--algorithm={algorithm}',
             f'--output=json:{output_path}',
@@ -314,6 +311,30 @@ class DuplicateParser:
     def __init__(self, config: DedupeConfig):
         self.config = config
 
+    def _should_exclude(self, file_path: str, exclude_patterns: List[str]) -> bool:
+        """Check if file path matches any exclude pattern
+
+        Args:
+            file_path: Full path to check
+            exclude_patterns: List of glob patterns to match against
+
+        Returns:
+            True if file should be excluded, False otherwise
+        """
+        import fnmatch
+
+        for pattern in exclude_patterns:
+            # Convert glob pattern to regex-like matching
+            # Support both full path matching and basename matching
+            if fnmatch.fnmatch(file_path, pattern):
+                return True
+            # Also try matching just the basename
+            basename = os.path.basename(file_path)
+            if fnmatch.fnmatch(basename, pattern):
+                return True
+
+        return False
+
     def parse(self, json_path: str) -> List[DuplicateSet]:
         """Parse rmlint JSON output into DuplicateSet objects"""
         logger.info("Parsing rmlint output: %s", json_path)
@@ -339,6 +360,9 @@ class DuplicateParser:
             logger.info("No duplicates found - rmlint output is empty")
             return []
 
+        # Get exclude patterns for filtering
+        exclude_patterns = self.config.config.get('exclude_patterns', [])
+
         # Group duplicates by checksum using defaultdict for efficiency
         duplicate_groups: Dict[str, List[Dict]] = defaultdict(list)
 
@@ -347,6 +371,12 @@ class DuplicateParser:
                 logger.warning(f"Skipping invalid entry: {type(entry)}")
                 continue
             if entry.get('type') == 'duplicate_file':
+                # Apply exclude pattern filtering
+                file_path = entry.get('path', '')
+                if self._should_exclude(file_path, exclude_patterns):
+                    logger.debug(f"Excluding file matching pattern: {file_path}")
+                    continue
+
                 checksum = entry.get('checksum', 'unknown')
                 duplicate_groups[checksum].append(entry)
 
