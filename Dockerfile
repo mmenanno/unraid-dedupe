@@ -4,6 +4,7 @@ FROM python:3.11-slim AS builder
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
+    g++ \
     make \
     scons \
     gettext \
@@ -11,14 +12,18 @@ RUN apt-get update && apt-get install -y \
     libelf-dev \
     libglib2.0-dev \
     libjson-glib-dev \
+    libblkid-dev \
+    python3-dev \
+    python3-sphinx \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # Clone and build rmlint
 RUN git clone https://github.com/sahib/rmlint.git /tmp/rmlint \
     && cd /tmp/rmlint \
-    && scons config \
-    && scons install
+    && scons config --prefix=/usr/local --without-gui \
+    && scons install --prefix=/usr/local \
+    && ldconfig
 
 # Stage 2: Final runtime image
 FROM python:3.11-slim
@@ -28,9 +33,10 @@ RUN apt-get update && apt-get install -y \
     libelf1 \
     libglib2.0-0 \
     libjson-glib-1.0-0 \
+    libblkid1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy rmlint binary and libraries from builder
+# Copy rmlint binary from builder
 COPY --from=builder /usr/local/bin/rmlint /usr/local/bin/rmlint
 
 # Set working directory
