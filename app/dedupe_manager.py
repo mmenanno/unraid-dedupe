@@ -150,8 +150,16 @@ class RmlintScanner:
     def __init__(self, config: DedupeConfig):
         self.config = config
 
-    def scan(self, output_path: str = "/data/reports/scan.json") -> bool:
-        """Run rmlint scan and save results"""
+    def scan(self, output_path: str = "/data/reports/scan.json", progress_callback=None) -> bool:
+        """Run rmlint scan and save results
+
+        Args:
+            output_path: Where to save the JSON output
+            progress_callback: Optional callback function(progress: int, message: str) for progress updates
+
+        Returns:
+            True if successful, False otherwise
+        """
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         scan_paths = self.config.config.get('scan_paths', ['/mnt/user/data'])
@@ -178,14 +186,90 @@ class RmlintScanner:
         logger.info(f"Running rmlint: {' '.join(cmd)}")
 
         try:
-            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            logger.info("rmlint scan completed successfully")
-            logger.debug(result.stdout)
-            return True
-        except subprocess.CalledProcessError as e:
+            # Use Popen for real-time output streaming
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+
+            # Track progress through stderr (where rmlint outputs progress)
+            stderr_output = []
+            while True:
+                line = process.stderr.readline()
+                if not line and process.poll() is not None:
+                    break
+
+                if line:
+                    stderr_output.append(line)
+                    line_stripped = line.strip()
+
+                    # Parse rmlint progress output
+                    if progress_callback:
+                        progress_info = self._parse_rmlint_progress(line_stripped, stderr_output)
+                        if progress_info:
+                            progress_callback(progress_info['percent'], progress_info['message'])
+
+            # Get return code
+            return_code = process.wait()
+
+            if return_code == 0:
+                logger.info("rmlint scan completed successfully")
+                if progress_callback:
+                    progress_callback(100, "Scan complete")
+                return True
+            else:
+                error_output = ''.join(stderr_output)
+                logger.error(f"rmlint scan failed with code {return_code}")
+                logger.error(error_output)
+                return False
+
+        except Exception as e:
             logger.error(f"rmlint scan failed: {e}")
-            logger.error(e.stderr)
             return False
+
+    def _parse_rmlint_progress(self, line: str, all_lines: list) -> Optional[Dict]:
+        """Parse rmlint output to extract progress information
+
+        Returns dict with 'percent' and 'message' keys, or None if no progress info
+        """
+        # rmlint outputs various progress indicators
+        # Look for patterns like:
+        # - "Traversing: 1234 files"
+        # - "Hashing: 567 / 1234 files"
+        # - "==> In total X files"
+
+        if "Traversing" in line or "traversing" in line:
+            return {'percent': 10, 'message': 'Scanning directories...'}
+
+        # Match patterns like "Preprocessing: 123 / 456 files"
+        if "/" in line and "files" in line.lower():
+            try:
+                # Extract numbers like "123 / 456"
+                parts = line.split('/')
+                if len(parts) >= 2:
+                    current = int(''.join(filter(str.isdigit, parts[0])))
+                    total = int(''.join(filter(str.isdigit, parts[1].split()[0])))
+                    if total > 0:
+                        percent = min(90, int((current / total) * 80) + 10)  # 10-90%
+                        return {'percent': percent, 'message': f'Processing files ({current}/{total})...'}
+            except (ValueError, ZeroDivisionError, IndexError):
+                pass
+
+        # Processing/hashing indicators
+        if "preprocessing" in line.lower():
+            return {'percent': 20, 'message': 'Preprocessing files...'}
+        if "hashing" in line.lower() or "hash" in line.lower():
+            return {'percent': 50, 'message': 'Computing checksums...'}
+        if "matching" in line.lower() or "finding" in line.lower():
+            return {'percent': 80, 'message': 'Finding duplicates...'}
+        if "==> In total" in line or "total" in line.lower():
+            return {'percent': 95, 'message': 'Finalizing results...'}
+
+        return None
 
 
 class DuplicateParser:
@@ -528,8 +612,16 @@ class DedupeManager:
         self.report_gen = ReportGenerator()
         self.executor = DedupeExecutor(self.config)
 
-    def scan(self, report_id: Optional[str] = None) -> str:
-        """Run complete scan and generate reports"""
+    def scan(self, report_id: Optional[str] = None, progress_callback=None) -> str:
+        """Run complete scan and generate reports
+
+        Args:
+            report_id: Optional custom report ID
+            progress_callback: Optional callback(progress: int, message: str) for progress updates
+
+        Returns:
+            Report ID string
+        """
         if not report_id:
             report_id = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -540,16 +632,23 @@ class DedupeManager:
         report_json = f"{report_dir}/report.json"
         report_md = f"{report_dir}/report.md"
 
-        # Run rmlint scan
-        if not self.scanner.scan(scan_json):
+        # Run rmlint scan (0-90% of progress)
+        if not self.scanner.scan(scan_json, progress_callback=progress_callback):
             raise Exception("Scan failed")
 
-        # Parse results
+        # Parse results (90-95%)
+        if progress_callback:
+            progress_callback(92, "Parsing results...")
         duplicate_sets = self.parser.parse(scan_json)
 
-        # Generate reports
+        # Generate reports (95-100%)
+        if progress_callback:
+            progress_callback(95, "Generating reports...")
         self.report_gen.generate_json(duplicate_sets, report_json)
         self.report_gen.generate_markdown(duplicate_sets, report_md)
+
+        if progress_callback:
+            progress_callback(100, "Complete")
 
         logger.info(f"Scan complete. Report ID: {report_id}")
         return report_id

@@ -72,7 +72,13 @@ def trigger_scan():
             scan_status['message'] = 'Starting scan...'
 
             logger.info("Starting deduplication scan")
-            report_id = manager.scan()
+
+            # Progress callback to update scan status
+            def update_progress(percent: int, message: str):
+                scan_status['progress'] = percent
+                scan_status['message'] = message
+
+            report_id = manager.scan(progress_callback=update_progress)
 
             scan_status['progress'] = 100
             scan_status['message'] = 'Scan complete'

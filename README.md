@@ -10,7 +10,7 @@ A self-contained Docker application for managing file deduplication on Unraid se
 - **Production Ready**: Runs with Gunicorn WSGI server for stable production deployment
 - **Safe Operations**: Dry-run reports, hardlink verification, comprehensive logging
 - **Configuration Management**: Full config editing through the web UI
-- **Real-time Progress**: Live scan status updates and log streaming
+- **Real-time Progress**: Live scan progress tracking with percentage and status updates
 
 ## Quick Start
 
@@ -72,7 +72,12 @@ A self-contained Docker application for managing file deduplication on Unraid se
 
 1. Go to the **Dashboard**
 2. Click "Start Scan"
-3. Wait for scan to complete (progress shown in real-time)
+3. Watch the progress bar for real-time updates:
+   - Scanning directories...
+   - Processing files...
+   - Computing checksums...
+   - Finding duplicates...
+   - Generating reports...
 
 **Scheduled Scans:**
 
@@ -329,6 +334,7 @@ docker logs dedupe-manager
 ### Scan fails with "Can't open directory or file" error
 
 This was fixed in recent versions. If you see this error:
+
 - Update to the latest version by rebuilding the container
 - The issue was with rmlint exclude pattern syntax (now uses `--exclude` instead of `--match-without-extension`)
 
