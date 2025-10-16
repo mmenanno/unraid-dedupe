@@ -548,7 +548,7 @@ def get_version() -> Tuple[Response, int]:
         os.path.join(os.path.dirname(__file__), 'VERSION'),  # /app/VERSION (Docker)
         os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VERSION'),  # ../VERSION (local dev)
     ]
-    
+
     for version_file in possible_paths:
         try:
             if os.path.exists(version_file):
@@ -558,7 +558,7 @@ def get_version() -> Tuple[Response, int]:
         except Exception as e:
             logger.debug(f"Failed to read version from {version_file}: {e}")
             continue
-    
+
     logger.warning("VERSION file not found in any expected location")
     return jsonify({'version': 'unknown'}), 200
 
