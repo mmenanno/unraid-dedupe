@@ -31,7 +31,7 @@
             <button
                 type="button"
                 onclick="toggleSection('scan-paths-section')"
-                class="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-700/50 transition-colors rounded-t-xl"
+                class="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-700/50 transition-colors rounded-t-xl relative"
                 aria-expanded="true"
                 aria-controls="scan-paths-section">
                 <div class="flex items-center gap-3">
@@ -88,7 +88,7 @@
             <button
                 type="button"
                 onclick="toggleSection('exclude-section')"
-                class="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-700/50 transition-colors rounded-t-xl"
+                class="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-700/50 transition-colors rounded-t-xl relative"
                 aria-expanded="true"
                 aria-controls="exclude-section">
                 <div class="flex items-center gap-3">
@@ -181,7 +181,7 @@
             <button
                 type="button"
                 onclick="toggleSection('prefs-section')"
-                class="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-700/50 transition-colors rounded-t-xl"
+                class="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-700/50 transition-colors rounded-t-xl relative"
                 aria-expanded="true"
                 aria-controls="prefs-section">
                 <div class="flex items-center gap-3">
@@ -191,14 +191,14 @@
                     <div class="text-left">
                         <h3 class="text-lg font-semibold text-dark-100 flex items-center gap-2">
                             Path Preferences
-                            <button type="button"
-                                    data-tooltip="Path preferences determine which file to keep when duplicates are found. Lower priority numbers mean higher preference. For example, priority 1 files are kept over priority 2 files."
-                                    class="p-1 hover:bg-dark-700 rounded-full transition-colors"
+                            <span data-tooltip="Path preferences determine which file to keep when duplicates are found. Lower priority numbers mean higher preference. For example, priority 1 files are kept over priority 2 files."
+                                    class="p-1 hover:bg-dark-700 rounded-full transition-colors cursor-help inline-flex"
+                                    role="img"
                                     aria-label="Help for path preferences">
                                 <svg class="w-4 h-4 text-dark-500 hover:text-primary-400" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
                                 </svg>
-                            </button>
+                            </span>
                         </h3>
                         <p class="text-sm text-dark-400">Define which locations to prefer when choosing keepers</p>
                     </div>
@@ -270,7 +270,7 @@
             <button
                 type="button"
                 onclick="toggleSection('rmlint-section')"
-                class="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-700/50 transition-colors rounded-t-xl"
+                class="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-700/50 transition-colors rounded-t-xl relative"
                 aria-expanded="false"
                 aria-controls="rmlint-section">
                 <div class="flex items-center gap-3">
@@ -281,14 +281,14 @@
                     <div class="text-left">
                         <h3 class="text-lg font-semibold text-dark-100 flex items-center gap-2">
                             Rmlint Options
-                            <button type="button"
-                                    data-tooltip="Rmlint uses checksums to identify duplicate files. xxhash is fastest and recommended for most users. SHA256/SHA512 provide cryptographic security but are slower."
-                                    class="p-1 hover:bg-dark-700 rounded-full transition-colors"
+                            <span data-tooltip="Rmlint uses checksums to identify duplicate files. xxhash is fastest and recommended for most users. SHA256/SHA512 provide cryptographic security but are slower."
+                                    class="p-1 hover:bg-dark-700 rounded-full transition-colors cursor-help inline-flex"
+                                    role="img"
                                     aria-label="Help for rmlint options">
                                 <svg class="w-4 h-4 text-dark-500 hover:text-primary-400" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
                                 </svg>
-                            </button>
+                            </span>
                         </h3>
                         <p class="text-sm text-dark-400">Checksum algorithm configuration</p>
                     </div>
@@ -316,7 +316,7 @@
             <button
                 type="button"
                 onclick="toggleSection('safety-section')"
-                class="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-700/50 transition-colors rounded-t-xl"
+                class="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-700/50 transition-colors rounded-t-xl relative"
                 aria-expanded="false"
                 aria-controls="safety-section">
                 <div class="flex items-center gap-3">
@@ -438,7 +438,7 @@
                 chevron.style.transform = isExpanded ? 'rotate(0)' : 'rotate(-90deg)';
             }
         });
-        
+
         updateCrossDiskWarning();
     });
 
@@ -606,12 +606,12 @@
     function toggleSection(sectionId) {
         const section = document.getElementById(sectionId);
         const button = document.querySelector(`[aria-controls="${sectionId}"]`);
-        
+
         if (!section || !button) {
             console.error('Section or button not found:', sectionId);
             return;
         }
-        
+
         const chevron = button.querySelector('.section-chevron');
         const isExpanded = button.getAttribute('aria-expanded') === 'true';
 
