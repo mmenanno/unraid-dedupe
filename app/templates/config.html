@@ -609,23 +609,34 @@
     }
 
     function toggleSection(sectionId) {
+        console.log('toggleSection called:', sectionId);
+        
         const section = document.getElementById(sectionId);
         const button = document.querySelector(`[aria-controls="${sectionId}"]`);
-
-        if (!section || !button) {
-            console.error('Section or button not found:', sectionId);
+        
+        if (!section) {
+            console.error('Section not found:', sectionId);
             return;
         }
-
+        
+        if (!button) {
+            console.error('Button not found for section:', sectionId);
+            return;
+        }
+        
         const chevron = button.querySelector('.section-chevron');
         const isExpanded = button.getAttribute('aria-expanded') === 'true';
+        
+        console.log('Current state:', { sectionId, isExpanded, hasChevron: !!chevron });
 
         // Toggle visibility
         if (isExpanded) {
+            console.log('Collapsing section:', sectionId);
             section.classList.add('hidden');
             button.setAttribute('aria-expanded', 'false');
             if (chevron) chevron.style.transform = 'rotate(-90deg)';
         } else {
+            console.log('Expanding section:', sectionId);
             section.classList.remove('hidden');
             button.setAttribute('aria-expanded', 'true');
             if (chevron) chevron.style.transform = 'rotate(0)';

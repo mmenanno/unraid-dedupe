@@ -130,12 +130,8 @@ html {
     border-left-color: #3b82f6;
 }
 
-/* Ensure smooth color transitions for theme consistency */
-* {
-    transition-property: color, background-color, border-color;
-    transition-duration: 150ms;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-}
+/* Note: Smooth transitions are now handled by Tailwind v4's built-in defaults */
+/* Removed global * selector to avoid conflicts with Tailwind's transition classes */
 
 /* Prevent transition on page load */
 .no-transition {
