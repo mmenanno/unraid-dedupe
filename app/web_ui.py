@@ -60,6 +60,82 @@ if not secret_key:
     logger.warning("Set SECRET_KEY environment variable for production use.")
 app.config['SECRET_KEY'] = secret_key
 
+
+# Cache control for static files and API endpoints
+@app.after_request
+def add_cache_headers(response):
+    """Add appropriate cache headers based on file type and environment"""
+    # Detect development mode
+    is_dev = app.debug or os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+
+    # Cache static files (CSS, JS, images, fonts)
+    if request.path.startswith('/static/'):
+        # Clear any existing cache control headers that Flask may have set
+        response.cache_control.clear()
+
+        if is_dev:
+            # In development: shorter cache with ETag support for CSS
+            if request.path.endswith('.css'):
+                # CSS files: 5 minutes (cache-busting via query param handles updates)
+                response.cache_control.public = True
+                response.cache_control.max_age = 300
+                # Remove ETag since we're using query param versioning
+                response.headers.pop('ETag', None)
+            else:
+                # Other static files (images, etc.): 1 hour
+                response.cache_control.public = True
+                response.cache_control.max_age = 3600
+        else:
+            # In production: long-lived immutable cache for all static files
+            response.cache_control.public = True
+            response.cache_control.max_age = 31536000  # 1 year
+            response.cache_control.immutable = True
+
+    # Cache version endpoint
+    elif request.path == '/api/version':
+        response.cache_control.public = True
+        if is_dev:
+            response.cache_control.max_age = 30  # 30 seconds in dev
+        else:
+            response.cache_control.max_age = 300  # 5 minutes in production
+
+    return response
+
+
+# Jinja2 filter for cache-busting in development
+@app.template_filter('cache_bust')
+def cache_bust_filter(url):
+    """
+    Add cache-busting query parameter to URLs in development mode.
+    Uses file modification time to invalidate cache when files change.
+    """
+    # Only apply cache-busting in development mode
+    is_dev = app.debug or os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    if not is_dev:
+        return url
+
+    # Only apply to CSS files
+    if not url.endswith('.css'):
+        return url
+
+    # Extract filename from URL (handles both /static/file.css and full URLs)
+    if '/static/' in url:
+        filename = url.split('/static/')[-1].split('?')[0]
+        static_folder = os.path.join(app.root_path, 'static')
+        file_path = os.path.join(static_folder, filename)
+
+        try:
+            # Get file modification time
+            mtime = os.path.getmtime(file_path)
+            # Add as query parameter
+            separator = '&' if '?' in url else '?'
+            return f"{url}{separator}v={int(mtime)}"
+        except (OSError, FileNotFoundError):
+            # If file doesn't exist, return URL unchanged
+            pass
+
+    return url
+
 # Configure rate limiting
 limiter = Limiter(
     app=app,
