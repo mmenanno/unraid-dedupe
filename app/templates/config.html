@@ -392,7 +392,7 @@
         </div>
 
         <!-- Action Buttons -->
-        <div class="flex flex-col sm:flex-row gap-3 sticky bottom-4 bg-dark-900/95 backdrop-blur-lg border border-dark-700 rounded-xl p-4 shadow-2xl">
+        <div id="action-buttons" class="hidden flex-col sm:flex-row gap-3 sticky bottom-4 bg-dark-900/95 backdrop-blur-lg border border-dark-700 rounded-xl p-4 shadow-2xl transition-all">
             <button
                 type="button"
                 onclick="validateConfig()"
@@ -427,6 +427,28 @@
 
 {% block scripts %}
 <script>
+    // Track form dirty state
+    let formIsDirty = false;
+    const actionButtons = document.getElementById('action-buttons');
+    
+    function markFormDirty() {
+        if (!formIsDirty) {
+            formIsDirty = true;
+            if (actionButtons) {
+                actionButtons.classList.remove('hidden');
+                actionButtons.classList.add('flex');
+            }
+        }
+    }
+    
+    function markFormClean() {
+        formIsDirty = false;
+        if (actionButtons) {
+            actionButtons.classList.add('hidden');
+            actionButtons.classList.remove('flex');
+        }
+    }
+
     // Initialize page on load
     document.addEventListener('DOMContentLoaded', () => {
         // Initialize chevrons based on current aria-expanded state (respect HTML defaults)
@@ -438,8 +460,16 @@
                 chevron.style.transform = isExpanded ? 'rotate(0)' : 'rotate(-90deg)';
             }
         });
-
+        
         updateCrossDiskWarning();
+        
+        // Track form changes
+        const form = document.getElementById('config-form');
+        if (form) {
+            // Listen to all input, select, and textarea changes
+            form.addEventListener('input', markFormDirty);
+            form.addEventListener('change', markFormDirty);
+        }
     });
 
     function exportConfig() {
@@ -651,6 +681,7 @@
         `;
         container.appendChild(div);
         div.querySelector('input').focus();
+        markFormDirty();
     }
 
     function addExcludePattern() {
@@ -676,6 +707,7 @@
         `;
         container.appendChild(div);
         div.querySelector('input').focus();
+        markFormDirty();
     }
 
     function addExcludePatternWithValue(value) {
@@ -701,6 +733,7 @@
         `;
         container.appendChild(div);
         showToast(`Added pattern: ${value}`, 'success');
+        markFormDirty();
     }
 
     function addPathPreference() {
@@ -741,10 +774,12 @@
         `;
         container.appendChild(div);
         div.querySelector('input').focus();
+        markFormDirty();
     }
 
     function removeField(element) {
         element.remove();
+        markFormDirty();
     }
 
     function saveConfig(event) {
@@ -812,6 +847,7 @@
 
             if (data.success) {
                 showToast('Configuration saved successfully!', 'success');
+                markFormClean(); // Hide action buttons after successful save
             } else {
                 showToast('Failed to save configuration: ' + data.error, 'error');
             }
