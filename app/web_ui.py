@@ -17,6 +17,11 @@ from dedupe_manager import DedupeManager
 from scheduler import ScanScheduler, get_cron_presets
 
 
+# Ensure data directories exist before logging setup
+os.makedirs('/data/config', exist_ok=True)
+os.makedirs('/data/reports', exist_ok=True)
+os.makedirs('/data/logs', exist_ok=True)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
