@@ -611,12 +611,25 @@
     function toggleSection(sectionId) {
         const section = document.getElementById(sectionId);
         const button = document.querySelector(`[aria-controls="${sectionId}"]`);
+        
+        if (!section || !button) {
+            console.error('Section or button not found:', sectionId);
+            return;
+        }
+        
         const chevron = button.querySelector('.section-chevron');
         const isExpanded = button.getAttribute('aria-expanded') === 'true';
 
-        section.classList.toggle('hidden');
-        button.setAttribute('aria-expanded', !isExpanded);
-        chevron.style.transform = isExpanded ? 'rotate(-90deg)' : 'rotate(0)';
+        // Toggle visibility
+        if (isExpanded) {
+            section.classList.add('hidden');
+            button.setAttribute('aria-expanded', 'false');
+            if (chevron) chevron.style.transform = 'rotate(-90deg)';
+        } else {
+            section.classList.remove('hidden');
+            button.setAttribute('aria-expanded', 'true');
+            if (chevron) chevron.style.transform = 'rotate(0)';
+        }
     }
 
     function addScanPath() {
