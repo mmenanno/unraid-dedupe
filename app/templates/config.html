@@ -427,8 +427,23 @@
 
 {% block scripts %}
 <script>
-    // Check cross-disk warning on page load
+    // Initialize page on load
     document.addEventListener('DOMContentLoaded', () => {
+        // Ensure all sections start expanded (matching aria-expanded="true")
+        const sections = ['scan-paths-section', 'exclude-section', 'prefs-section', 'rmlint-section', 'safety-section'];
+        sections.forEach(sectionId => {
+            const section = document.getElementById(sectionId);
+            const button = document.querySelector(`[aria-controls="${sectionId}"]`);
+            if (section && button) {
+                section.classList.remove('hidden');
+                button.setAttribute('aria-expanded', 'true');
+                const chevron = button.querySelector('.section-chevron');
+                if (chevron) {
+                    chevron.style.transform = 'rotate(0)';
+                }
+            }
+        });
+        
         updateCrossDiskWarning();
     });
 
