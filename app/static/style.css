@@ -446,31 +446,179 @@ button[type="button"]:hover:not(:disabled) {
     font-weight: 500;
 }
 
+/* Universal input styling */
+input[type="text"],
+input[type="number"],
+textarea {
+    padding: 0.625rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    transition: all 0.2s ease;
+}
+
+input[type="text"]:hover,
+input[type="number"]:hover,
+textarea:hover {
+    border-color: var(--primary-color);
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    background-color: rgba(15, 23, 42, 0.8);
+}
+
+/* Textarea specific styling */
+textarea {
+    resize: vertical;
+    min-height: 100px;
+    font-family: inherit;
+    line-height: 1.5;
+}
+
+/* Custom Select Dropdown Styling */
+select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding: 0.625rem 2.5rem 0.625rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 12px;
+}
+
+select:hover {
+    border-color: var(--primary-color);
+}
+
+select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    background-color: rgba(15, 23, 42, 0.8);
+}
+
+/* Style select options */
+select option {
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    padding: 0.5rem;
+}
+
 .form-group input[type="text"],
 .form-group input[type="number"],
 .form-group select,
 .form-group textarea {
     width: 100%;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--border-color);
-    border-radius: 0.375rem;
-    font-size: 1rem;
-    background-color: var(--input-bg);
-    color: var(--text-color);
 }
 
-.form-group input[type="text"]:focus,
-.form-group input[type="number"]:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-    outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-}
-
+/* Custom Checkbox Styling */
 .form-group input[type="checkbox"] {
-    width: auto;
-    margin-right: 0.5rem;
+    appearance: none;
+    -webkit-appearance: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 2px solid var(--border-color);
+    border-radius: 0.375rem;
+    background-color: var(--input-bg);
+    cursor: pointer;
+    position: relative;
+    margin-right: 0.75rem;
+    transition: all 0.2s ease;
+    vertical-align: middle;
+}
+
+.form-group input[type="checkbox"]:hover {
+    border-color: var(--primary-color);
+}
+
+.form-group input[type="checkbox"]:checked {
+    background: linear-gradient(135deg, var(--primary-color), #2563eb);
+    border-color: var(--primary-color);
+}
+
+.form-group input[type="checkbox"]:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 0.875rem;
+    font-weight: bold;
+}
+
+.form-group input[type="checkbox"]:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+/* Custom Radio Button Styling */
+input[type="radio"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 2px solid var(--border-color);
+    border-radius: 50%;
+    background-color: var(--input-bg);
+    cursor: pointer;
+    position: relative;
+    margin-right: 0.75rem;
+    transition: all 0.2s ease;
+    vertical-align: middle;
+}
+
+input[type="radio"]:hover {
+    border-color: var(--primary-color);
+}
+
+input[type="radio"]:checked {
+    border-color: var(--primary-color);
+    background-color: var(--input-bg);
+}
+
+input[type="radio"]:checked::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary-color), #2563eb);
+}
+
+input[type="radio"]:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+/* Placeholder text styling */
+input::placeholder,
+textarea::placeholder {
+    color: var(--text-muted);
+    opacity: 0.6;
+}
+
+input:focus::placeholder,
+textarea:focus::placeholder {
+    opacity: 0.4;
 }
 
 .form-group small {
@@ -558,6 +706,10 @@ footer {
 
 /* Responsive Design */
 @media (max-width: 768px) {
+    .navbar {
+        position: relative;
+    }
+
     .navbar .container {
         flex-direction: column;
         gap: 1rem;
@@ -584,6 +736,11 @@ footer {
 
     .pref-group {
         grid-template-columns: 1fr;
+    }
+
+    /* Make cron help single column on mobile */
+    .card > div[style*="grid-template-columns: 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
     }
 }
 
