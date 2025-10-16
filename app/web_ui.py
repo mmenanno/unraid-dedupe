@@ -543,14 +543,24 @@ def server_error(e):
 @app.route('/api/version')
 def get_version() -> Tuple[Response, int]:
     """Get application version"""
-    version_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VERSION')
-    try:
-        with open(version_file, 'r') as f:
-            version = f.read().strip()
-        return jsonify({'version': version}), 200
-    except Exception as e:
-        logger.error(f"Failed to read version: {e}")
-        return jsonify({'version': 'unknown'}), 200
+    # Try multiple locations for VERSION file (local dev vs Docker)
+    possible_paths = [
+        os.path.join(os.path.dirname(__file__), 'VERSION'),  # /app/VERSION (Docker)
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VERSION'),  # ../VERSION (local dev)
+    ]
+    
+    for version_file in possible_paths:
+        try:
+            if os.path.exists(version_file):
+                with open(version_file, 'r') as f:
+                    version = f.read().strip()
+                return jsonify({'version': version}), 200
+        except Exception as e:
+            logger.debug(f"Failed to read version from {version_file}: {e}")
+            continue
+    
+    logger.warning("VERSION file not found in any expected location")
+    return jsonify({'version': 'unknown'}), 200
 
 
 @app.route('/api/stats/overview')

@@ -74,12 +74,8 @@ COPY config/dedupe_config.yaml /app/config/dedupe_config.yaml
 COPY gunicorn.conf.py /app/gunicorn.conf.py
 COPY VERSION /app/VERSION
 
-# Copy generated Tailwind CSS from builder (ensure directory exists and copy)
-RUN mkdir -p /app/static
+# Copy generated Tailwind CSS from builder
 COPY --from=tailwind-builder /build/app/static/tailwind.generated.css /app/static/tailwind.generated.css
-
-# List static files for debugging
-RUN ls -la /app/static/ && echo "Static files listed above"
 
 # Create data directories with proper permissions
 RUN mkdir -p /data/config /data/reports /data/logs \
