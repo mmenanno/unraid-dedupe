@@ -32,16 +32,21 @@ os.makedirs(CONFIG_DIR, exist_ok=True)
 os.makedirs(REPORTS_DIR, exist_ok=True)
 os.makedirs(LOGS_DIR, exist_ok=True)
 
-# Configure logging
+# Configure logging with worker process ID
+import multiprocessing
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(asctime)s [Worker-%(process)d] %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler(os.path.join(LOGS_DIR, 'web_ui.log')),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
+
+# Reduce verbosity of noisy libraries
+logging.getLogger('apscheduler').setLevel(logging.WARNING)
+logging.getLogger('scheduler').setLevel(logging.WARNING)
 
 
 # Initialize Flask app
@@ -209,10 +214,11 @@ def cancel_scan() -> bool:
 # Initialize scheduler
 scheduler = ScanScheduler(scan_callback)
 
-# Log startup information
-logger.info("Unraid Deduplication Manager initialized")
-mode = 'production' if not os.environ.get('FLASK_DEBUG', 'False').lower() == 'true' else 'development'
-logger.info("Running in %s mode", mode)
+# Log startup information (only once, not from every worker)
+if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':  # Avoid duplicate logs in dev mode
+    logger.info("Unraid Deduplication Manager initialized")
+    mode = 'production' if not os.environ.get('FLASK_DEBUG', 'False').lower() == 'true' else 'development'
+    logger.info("Running in %s mode", mode)
 
 
 # Routes
