@@ -430,7 +430,7 @@
     // Track form dirty state
     let formIsDirty = false;
     const actionButtons = document.getElementById('action-buttons');
-    
+
     function markFormDirty() {
         if (!formIsDirty) {
             formIsDirty = true;
@@ -440,7 +440,7 @@
             }
         }
     }
-    
+
     function markFormClean() {
         formIsDirty = false;
         if (actionButtons) {
@@ -460,9 +460,9 @@
                 chevron.style.transform = isExpanded ? 'rotate(0)' : 'rotate(-90deg)';
             }
         });
-        
+
         updateCrossDiskWarning();
-        
+
         // Track form changes
         const form = document.getElementById('config-form');
         if (form) {

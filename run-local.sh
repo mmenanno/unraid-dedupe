@@ -16,11 +16,25 @@ if ! python3 -c "import yaml" 2>/dev/null; then
     }
 fi
 
-# Check if CSS is built
-if [ ! -f "app/static/tailwind.generated.css" ]; then
-    echo "🎨 Building Tailwind CSS..."
-    ./build-css.sh || exit 1
-fi
+# Build CSS on startup to ensure it's fresh
+echo "🎨 Building Tailwind CSS..."
+./build-css.sh || exit 1
+
+# Start CSS watch process in background for auto-rebuild
+echo "👀 Starting CSS watch process..."
+./build-css.sh --watch > /dev/null 2>&1 &
+CSS_WATCH_PID=$!
+
+# Set up cleanup trap to kill watch process on exit
+cleanup() {
+    echo ""
+    echo "🧹 Cleaning up..."
+    if [ ! -z "$CSS_WATCH_PID" ]; then
+        kill $CSS_WATCH_PID 2>/dev/null
+    fi
+    exit
+}
+trap cleanup INT TERM EXIT
 
 # Set up local data directory for development
 LOCAL_DATA_DIR="$SCRIPT_DIR/data"
