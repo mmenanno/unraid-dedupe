@@ -1,40 +1,692 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Unraid Deduplication Manager{% endblock %}</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            200: '#bfdbfe',
+                            300: '#93c5fd',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a',
+                        },
+                        dark: {
+                            50: '#f8fafc',
+                            100: '#f1f5f9',
+                            200: '#e2e8f0',
+                            300: '#cbd5e1',
+                            400: '#94a3b8',
+                            500: '#64748b',
+                            600: '#475569',
+                            700: '#334155',
+                            800: '#1e293b',
+                            900: '#0f172a',
+                            950: '#020617',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
-    <nav class="navbar">
-        <div class="container">
-            <div class="nav-brand">
-                <a href="/" style="display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: inherit;">
-                    <img src="{{ url_for('static', filename='logo.svg') }}" alt="Unraid Dedupe Logo" style="width: 48px; height: 48px; border-radius: 8px;">
-                    <h1 style="margin: 0;">Unraid Dedupe</h1>
-                </a>
+<body class="bg-dark-900 text-dark-100 min-h-screen flex flex-col">
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary-600 focus:text-white focus:rounded-lg focus:shadow-lg">
+        Skip to main content
+    </a>
+
+    <!-- Navigation -->
+    <nav class="sticky top-0 z-50 bg-dark-800/95 backdrop-blur-lg border-b border-dark-700 shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo/Brand -->
+                <div class="flex items-center gap-3">
+                    <a href="/" class="flex items-center gap-3 hover:opacity-80 transition-opacity" aria-label="Unraid Dedupe Home">
+                        <img src="{{ url_for('static', filename='logo.svg') }}" alt="" class="w-10 h-10 rounded-lg" aria-hidden="true">
+                        <h1 class="text-xl font-bold bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
+                            Unraid Dedupe
+                        </h1>
+                    </a>
+                </div>
+
+                <!-- Desktop Navigation -->
+                <ul class="hidden md:flex items-center gap-2" role="menubar">
+                    <li role="none">
+                        <a href="/"
+                           class="px-4 py-2 rounded-lg text-sm font-medium transition-all {% if request.path == '/' %}bg-dark-700 text-primary-400{% else %}text-dark-300 hover:bg-dark-700 hover:text-primary-400{% endif %}"
+                           role="menuitem"
+                           {% if request.path == '/' %}aria-current="page"{% endif %}>
+                            Dashboard
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a href="/reports"
+                           class="px-4 py-2 rounded-lg text-sm font-medium transition-all {% if request.path.startswith('/reports') %}bg-dark-700 text-primary-400{% else %}text-dark-300 hover:bg-dark-700 hover:text-primary-400{% endif %}"
+                           role="menuitem"
+                           {% if request.path.startswith('/reports') %}aria-current="page"{% endif %}>
+                            Reports
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a href="/config"
+                           class="px-4 py-2 rounded-lg text-sm font-medium transition-all {% if request.path == '/config' %}bg-dark-700 text-primary-400{% else %}text-dark-300 hover:bg-dark-700 hover:text-primary-400{% endif %}"
+                           role="menuitem"
+                           {% if request.path == '/config' %}aria-current="page"{% endif %}>
+                            Config
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a href="/schedule"
+                           class="px-4 py-2 rounded-lg text-sm font-medium transition-all {% if request.path == '/schedule' %}bg-dark-700 text-primary-400{% else %}text-dark-300 hover:bg-dark-700 hover:text-primary-400{% endif %}"
+                           role="menuitem"
+                           {% if request.path == '/schedule' %}aria-current="page"{% endif %}>
+                            Schedule
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a href="/logs"
+                           class="px-4 py-2 rounded-lg text-sm font-medium transition-all {% if request.path == '/logs' %}bg-dark-700 text-primary-400{% else %}text-dark-300 hover:bg-dark-700 hover:text-primary-400{% endif %}"
+                           role="menuitem"
+                           {% if request.path == '/logs' %}aria-current="page"{% endif %}>
+                            Logs
+                        </a>
+                    </li>
+                    <li role="none">
+                        <button onclick="showKeyboardShortcuts()"
+                                class="p-2 rounded-lg text-dark-300 hover:bg-dark-700 hover:text-primary-400 transition-all"
+                                role="menuitem"
+                                aria-label="Show help"
+                                data-tooltip="Keyboard shortcuts and help">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Mobile Menu Button -->
+                <button
+                    id="mobile-menu-button"
+                    class="md:hidden p-2 rounded-lg text-dark-300 hover:bg-dark-700 hover:text-primary-400 transition-all focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    aria-label="Toggle navigation menu"
+                    aria-expanded="false"
+                    aria-controls="mobile-menu">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path class="menu-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        <path class="close-icon hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
             </div>
-            <ul class="nav-menu">
-                <li><a href="/" class="{% if request.path == '/' %}active{% endif %}">Dashboard</a></li>
-                <li><a href="/reports" class="{% if request.path.startswith('/reports') %}active{% endif %}">Reports</a></li>
-                <li><a href="/config" class="{% if request.path == '/config' %}active{% endif %}">Config</a></li>
-                <li><a href="/schedule" class="{% if request.path == '/schedule' %}active{% endif %}">Schedule</a></li>
-                <li><a href="/logs" class="{% if request.path == '/logs' %}active{% endif %}">Logs</a></li>
-            </ul>
+
+            <!-- Mobile Navigation -->
+            <div id="mobile-menu" class="hidden md:hidden pb-4" role="menu">
+                <ul class="flex flex-col gap-2">
+                    <li role="none">
+                        <a href="/"
+                           class="block px-4 py-2 rounded-lg text-sm font-medium transition-all {% if request.path == '/' %}bg-dark-700 text-primary-400{% else %}text-dark-300 hover:bg-dark-700 hover:text-primary-400{% endif %}"
+                           role="menuitem">
+                            Dashboard
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a href="/reports"
+                           class="block px-4 py-2 rounded-lg text-sm font-medium transition-all {% if request.path.startswith('/reports') %}bg-dark-700 text-primary-400{% else %}text-dark-300 hover:bg-dark-700 hover:text-primary-400{% endif %}"
+                           role="menuitem">
+                            Reports
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a href="/config"
+                           class="block px-4 py-2 rounded-lg text-sm font-medium transition-all {% if request.path == '/config' %}bg-dark-700 text-primary-400{% else %}text-dark-300 hover:bg-dark-700 hover:text-primary-400{% endif %}"
+                           role="menuitem">
+                            Config
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a href="/schedule"
+                           class="block px-4 py-2 rounded-lg text-sm font-medium transition-all {% if request.path == '/schedule' %}bg-dark-700 text-primary-400{% else %}text-dark-300 hover:bg-dark-700 hover:text-primary-400{% endif %}"
+                           role="menuitem">
+                            Schedule
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a href="/logs"
+                           class="block px-4 py-2 rounded-lg text-sm font-medium transition-all {% if request.path == '/logs' %}bg-dark-700 text-primary-400{% else %}text-dark-300 hover:bg-dark-700 hover:text-primary-400{% endif %}"
+                           role="menuitem">
+                            Logs
+                        </a>
+                    </li>
+                    <li role="none">
+                        <button onclick="showKeyboardShortcuts()"
+                                class="block w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all text-dark-300 hover:bg-dark-700 hover:text-primary-400"
+                                role="menuitem">
+                            Help
+                        </button>
+                    </li>
+                </ul>
+            </div>
         </div>
     </nav>
 
-    <main class="container">
+    <!-- Main Content -->
+    <main id="main-content" class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {% block content %}{% endblock %}
     </main>
 
-    <footer>
-        <div class="container">
-            <p>&copy; 2024 Unraid Deduplication Manager</p>
+    <!-- Footer -->
+    <footer class="mt-auto bg-dark-800 border-t border-dark-700 py-6">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-dark-400 text-sm space-y-2">
+            <div class="flex items-center justify-center gap-2">
+                <p>&copy; 2024 Unraid Deduplication Manager <span id="app-version" class="text-dark-500"></span></p>
+                <span id="connection-status" class="flex items-center gap-1 text-xs" title="Connection status">
+                    <span class="w-2 h-2 rounded-full bg-green-500" id="status-indicator"></span>
+                    <span class="text-dark-500" id="status-text">Online</span>
+                </span>
+            </div>
+            <button onclick="showKeyboardShortcuts()" class="text-dark-500 hover:text-primary-400 transition-colors text-xs">
+                Press <kbd class="px-1.5 py-0.5 bg-dark-700 rounded text-dark-300">?</kbd> for keyboard shortcuts
+            </button>
         </div>
     </footer>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Tooltip Container -->
+    <div id="tooltip-container" class="fixed z-[60] pointer-events-none hidden">
+        <div class="bg-dark-900 border border-dark-600 rounded-lg shadow-xl px-3 py-2 max-w-xs">
+            <p id="tooltip-text" class="text-sm text-dark-200"></p>
+        </div>
+    </div>
+
+    <!-- Modal Container -->
+    <div id="modal-overlay" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" aria-hidden="true">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div id="modal-content"
+                 class="bg-dark-800 rounded-xl shadow-2xl border border-dark-700 max-w-md w-full p-6"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-labelledby="modal-title">
+                <h3 id="modal-title" class="text-xl font-bold text-dark-100 mb-4"></h3>
+                <p id="modal-message" class="text-dark-300 mb-6"></p>
+                <div id="modal-actions" class="flex gap-3 justify-end"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Scripts -->
+    <script>
+        // Mobile Menu Toggle
+        const mobileMenuButton = document.getElementById('mobile-menu-button');
+        const mobileMenu = document.getElementById('mobile-menu');
+        const menuIcon = mobileMenuButton.querySelector('.menu-icon');
+        const closeIcon = mobileMenuButton.querySelector('.close-icon');
+
+        mobileMenuButton.addEventListener('click', () => {
+            const isOpen = mobileMenu.classList.contains('hidden');
+            mobileMenu.classList.toggle('hidden');
+            menuIcon.classList.toggle('hidden');
+            closeIcon.classList.toggle('hidden');
+            mobileMenuButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        });
+
+        // Toast Notification System (Enhanced with action buttons)
+        window.showToast = function(message, type = 'info', duration = 5000, action = null) {
+            const toast = document.createElement('div');
+            toast.className = `toast-notification flex items-start gap-3 p-4 rounded-lg shadow-lg border transform transition-all duration-300 translate-x-full min-w-[300px] max-w-md ${
+                type === 'success' ? 'bg-green-900/90 border-green-700 text-green-100' :
+                type === 'error' ? 'bg-red-900/90 border-red-700 text-red-100' :
+                type === 'warning' ? 'bg-yellow-900/90 border-yellow-700 text-yellow-100' :
+                'bg-primary-900/90 border-primary-700 text-primary-100'
+            }`;
+
+            const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : type === 'warning' ? '⚠' : 'ℹ';
+
+            let actionHtml = '';
+            if (action) {
+                actionHtml = `
+                    <button onclick="${action.onClick}; this.closest('.toast-notification').remove();"
+                            class="px-3 py-1 text-xs font-medium rounded bg-white/20 hover:bg-white/30 transition-colors">
+                        ${action.text}
+                    </button>
+                `;
+            }
+
+            toast.innerHTML = `
+                <span class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-bold ${
+                    type === 'success' ? 'bg-green-800' :
+                    type === 'error' ? 'bg-red-800' :
+                    type === 'warning' ? 'bg-yellow-800' :
+                    'bg-primary-800'
+                }">${icon}</span>
+                <div class="flex-1">
+                    <span class="text-sm block">${message}</span>
+                    ${actionHtml}
+                </div>
+                <button onclick="this.parentElement.remove()" class="flex-shrink-0 hover:opacity-70 transition-opacity" aria-label="Close notification">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                    </svg>
+                </button>
+            `;
+
+            document.getElementById('toast-container').appendChild(toast);
+
+            // Animate in
+            setTimeout(() => toast.classList.remove('translate-x-full'), 10);
+
+            // Auto remove
+            if (duration > 0) {
+                setTimeout(() => {
+                    toast.classList.add('translate-x-full', 'opacity-0');
+                    setTimeout(() => toast.remove(), 300);
+                }, duration);
+            }
+        };
+
+        // Modal System
+        window.showModal = function(title, message, buttons = []) {
+            const overlay = document.getElementById('modal-overlay');
+            const modalTitle = document.getElementById('modal-title');
+            const modalMessage = document.getElementById('modal-message');
+            const modalActions = document.getElementById('modal-actions');
+
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            modalActions.innerHTML = '';
+
+            buttons.forEach(btn => {
+                const button = document.createElement('button');
+                button.textContent = btn.text;
+                button.className = `px-4 py-2 rounded-lg font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-dark-800 ${
+                    btn.primary ? 'bg-primary-600 hover:bg-primary-700 text-white focus:ring-primary-500' :
+                    btn.danger ? 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500' :
+                    'bg-dark-700 hover:bg-dark-600 text-dark-200 focus:ring-dark-500'
+                }`;
+                button.onclick = () => {
+                    hideModal();
+                    if (btn.onClick) btn.onClick();
+                };
+                modalActions.appendChild(button);
+            });
+
+            overlay.classList.remove('hidden');
+            overlay.setAttribute('aria-hidden', 'false');
+
+            // Focus first button
+            setTimeout(() => modalActions.querySelector('button')?.focus(), 100);
+        };
+
+        window.hideModal = function() {
+            const overlay = document.getElementById('modal-overlay');
+            overlay.classList.add('hidden');
+            overlay.setAttribute('aria-hidden', 'true');
+        };
+
+        // Close modal on overlay click
+        document.getElementById('modal-overlay').addEventListener('click', (e) => {
+            if (e.target.id === 'modal-overlay') hideModal();
+        });
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !document.getElementById('modal-overlay').classList.contains('hidden')) {
+                hideModal();
+            }
+        });
+
+        // Keyboard Shortcuts System
+        let keySequence = [];
+
+        document.addEventListener('keydown', (e) => {
+            // Don't trigger shortcuts when typing in inputs
+            if (e.target.matches('input, textarea, select')) {
+                return;
+            }
+
+            // Show shortcuts help
+            if (e.key === '?' && !e.shiftKey) {
+                e.preventDefault();
+                showKeyboardShortcuts();
+                return;
+            }
+
+            // Escape closes modals
+            if (e.key === 'Escape') {
+                const shortcutsModal = document.getElementById('shortcuts-modal');
+                if (shortcutsModal && !shortcutsModal.classList.contains('hidden')) {
+                    shortcutsModal.classList.add('hidden');
+                    return;
+                }
+            }
+
+            // Single key shortcuts
+            switch(e.key) {
+                case 'n':
+                    if (!e.ctrlKey && !e.metaKey) {
+                        e.preventDefault();
+                        const scanBtn = document.getElementById('start-scan-btn');
+                        if (scanBtn && !scanBtn.disabled) {
+                            scanBtn.click();
+                        }
+                    }
+                    break;
+                case 'r':
+                    if (!e.ctrlKey && !e.metaKey) {
+                        e.preventDefault();
+                        window.location.href = '/reports';
+                    }
+                    break;
+                case 'c':
+                    if (!e.ctrlKey && !e.metaKey) {
+                        e.preventDefault();
+                        window.location.href = '/config';
+                    }
+                    break;
+                case 'l':
+                    if (!e.ctrlKey && !e.metaKey) {
+                        e.preventDefault();
+                        window.location.href = '/logs';
+                    }
+                    break;
+                case '/':
+                    e.preventDefault();
+                    const searchInput = document.getElementById('search-input');
+                    if (searchInput) {
+                        searchInput.focus();
+                    }
+                    break;
+            }
+
+            // 'g' key sequences
+            if (e.key === 'g') {
+                keySequence.push('g');
+                setTimeout(() => {
+                    keySequence = [];
+                }, 1000);
+            } else if (keySequence[0] === 'g') {
+                if (e.key === 'h') {
+                    e.preventDefault();
+                    window.location.href = '/';
+                } else if (e.key === 's') {
+                    e.preventDefault();
+                    window.location.href = '/schedule';
+                }
+                keySequence = [];
+            }
+        });
+
+        // Keyboard Shortcuts Modal
+        window.showKeyboardShortcuts = function() {
+            const existing = document.getElementById('shortcuts-modal');
+            if (existing) {
+                existing.classList.remove('hidden');
+                return;
+            }
+
+            const modal = document.createElement('div');
+            modal.id = 'shortcuts-modal';
+            modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm';
+            modal.innerHTML = `
+                <div class="bg-dark-800 rounded-xl shadow-2xl border border-dark-700 max-w-2xl w-full mx-4 p-6 max-h-[80vh] overflow-y-auto">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-2xl font-bold text-dark-50">Keyboard Shortcuts</h2>
+                        <button onclick="document.getElementById('shortcuts-modal').classList.add('hidden')"
+                                class="p-2 hover:bg-dark-700 rounded-lg transition-colors">
+                            <svg class="w-5 h-5 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="space-y-6">
+                        <div>
+                            <h3 class="text-lg font-semibold text-primary-400 mb-3">Navigation</h3>
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between py-2 border-b border-dark-700">
+                                    <span class="text-dark-300">Go to Dashboard</span>
+                                    <kbd class="px-2 py-1 bg-dark-900 rounded text-primary-400 font-mono text-sm">g</kbd>
+                                    <kbd class="px-2 py-1 bg-dark-900 rounded text-primary-400 font-mono text-sm">h</kbd>
+                                </div>
+                                <div class="flex items-center justify-between py-2 border-b border-dark-700">
+                                    <span class="text-dark-300">Go to Reports</span>
+                                    <kbd class="px-2 py-1 bg-dark-900 rounded text-primary-400 font-mono text-sm">r</kbd>
+                                </div>
+                                <div class="flex items-center justify-between py-2 border-b border-dark-700">
+                                    <span class="text-dark-300">Go to Config</span>
+                                    <kbd class="px-2 py-1 bg-dark-900 rounded text-primary-400 font-mono text-sm">c</kbd>
+                                </div>
+                                <div class="flex items-center justify-between py-2 border-b border-dark-700">
+                                    <span class="text-dark-300">Go to Schedule</span>
+                                    <kbd class="px-2 py-1 bg-dark-900 rounded text-primary-400 font-mono text-sm">g</kbd>
+                                    <kbd class="px-2 py-1 bg-dark-900 rounded text-primary-400 font-mono text-sm">s</kbd>
+                                </div>
+                                <div class="flex items-center justify-between py-2 border-b border-dark-700">
+                                    <span class="text-dark-300">Go to Logs</span>
+                                    <kbd class="px-2 py-1 bg-dark-900 rounded text-primary-400 font-mono text-sm">l</kbd>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 class="text-lg font-semibold text-primary-400 mb-3">Actions</h3>
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between py-2 border-b border-dark-700">
+                                    <span class="text-dark-300">Start New Scan</span>
+                                    <kbd class="px-2 py-1 bg-dark-900 rounded text-primary-400 font-mono text-sm">n</kbd>
+                                </div>
+                                <div class="flex items-center justify-between py-2 border-b border-dark-700">
+                                    <span class="text-dark-300">Focus Search</span>
+                                    <kbd class="px-2 py-1 bg-dark-900 rounded text-primary-400 font-mono text-sm">/</kbd>
+                                </div>
+                                <div class="flex items-center justify-between py-2 border-b border-dark-700">
+                                    <span class="text-dark-300">Close Modal / Cancel</span>
+                                    <kbd class="px-2 py-1 bg-dark-900 rounded text-primary-400 font-mono text-sm">Esc</kbd>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 class="text-lg font-semibold text-primary-400 mb-3">Help</h3>
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between py-2 border-b border-dark-700">
+                                    <span class="text-dark-300">Show this help</span>
+                                    <kbd class="px-2 py-1 bg-dark-900 rounded text-primary-400 font-mono text-sm">?</kbd>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 p-4 bg-primary-900/20 border border-primary-700/50 rounded-lg">
+                        <p class="text-sm text-dark-300 flex items-start gap-2">
+                            <svg class="w-5 h-5 text-primary-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                            </svg>
+                            <span>Shortcuts don't work when typing in input fields. Press <kbd class="px-1.5 py-0.5 bg-dark-900 rounded mx-1">Esc</kbd> or click outside to exit input focus.</span>
+                        </p>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            // Close on overlay click
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.add('hidden');
+                }
+            });
+        };
+
+        // Connection status monitoring
+        let isOnline = true;
+
+        function updateConnectionStatus(online) {
+            isOnline = online;
+            const indicator = document.getElementById('status-indicator');
+            const text = document.getElementById('status-text');
+
+            if (online) {
+                indicator.className = 'w-2 h-2 rounded-full bg-green-500';
+                text.textContent = 'Online';
+            } else {
+                indicator.className = 'w-2 h-2 rounded-full bg-red-500';
+                text.textContent = 'Offline';
+            }
+        }
+
+        // Monitor connection status
+        window.addEventListener('online', () => updateConnectionStatus(true));
+        window.addEventListener('offline', () => updateConnectionStatus(false));
+
+        // Periodic health check
+        setInterval(() => {
+            fetch('/health', { method: 'GET', cache: 'no-cache' })
+                .then(response => {
+                    if (!isOnline && response.ok) {
+                        updateConnectionStatus(true);
+                    }
+                })
+                .catch(() => {
+                    if (isOnline) {
+                        updateConnectionStatus(false);
+                        showToast('Connection lost. Attempting to reconnect...', 'warning', 5000);
+                    }
+                });
+        }, 30000); // Check every 30 seconds
+
+        // Load version number
+        fetch('/api/version')
+            .then(response => response.json())
+            .then(data => {
+                const versionEl = document.getElementById('app-version');
+                if (versionEl && data.version) {
+                    versionEl.textContent = `v${data.version}`;
+                }
+            })
+            .catch(err => console.error('Failed to load version:', err));
+
+        // Tooltip System
+        let tooltipTimeout = null;
+        const tooltipContainer = document.getElementById('tooltip-container');
+        const tooltipText = document.getElementById('tooltip-text');
+
+        window.showTooltip = function(element, text) {
+            if (tooltipTimeout) {
+                clearTimeout(tooltipTimeout);
+            }
+
+            tooltipText.textContent = text;
+            tooltipContainer.classList.remove('hidden');
+
+            const rect = element.getBoundingClientRect();
+            const tooltipRect = tooltipContainer.firstElementChild.getBoundingClientRect();
+
+            // Position above the element
+            let top = rect.top - tooltipRect.height - 8;
+            let left = rect.left + (rect.width / 2) - (tooltipRect.width / 2);
+
+            // Keep on screen
+            if (left < 8) left = 8;
+            if (left + tooltipRect.width > window.innerWidth - 8) {
+                left = window.innerWidth - tooltipRect.width - 8;
+            }
+            if (top < 8) {
+                top = rect.bottom + 8; // Show below if no room above
+            }
+
+            tooltipContainer.style.top = top + 'px';
+            tooltipContainer.style.left = left + 'px';
+        };
+
+        window.hideTooltip = function() {
+            tooltipTimeout = setTimeout(() => {
+                tooltipContainer.classList.add('hidden');
+            }, 100);
+        };
+
+        // Auto-attach tooltips to elements with data-tooltip attribute
+        document.addEventListener('mouseover', (e) => {
+            const el = e.target.closest('[data-tooltip]');
+            if (el) {
+                showTooltip(el, el.getAttribute('data-tooltip'));
+            }
+        });
+
+        document.addEventListener('mouseout', (e) => {
+            const el = e.target.closest('[data-tooltip]');
+            if (el) {
+                hideTooltip();
+            }
+        });
+
+        // Confetti Animation for Success
+        window.triggerConfetti = function() {
+            const duration = 3000;
+            const animationEnd = Date.now() + duration;
+            const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 100 };
+
+            function randomInRange(min, max) {
+                return Math.random() * (max - min) + min;
+            }
+
+            const confettiInterval = setInterval(function() {
+                const timeLeft = animationEnd - Date.now();
+
+                if (timeLeft <= 0) {
+                    return clearInterval(confettiInterval);
+                }
+
+                const particleCount = 50 * (timeLeft / duration);
+
+                // Create simple confetti effect with CSS
+                for (let i = 0; i < 5; i++) {
+                    createConfettiParticle();
+                }
+            }, 50);
+        };
+
+        function createConfettiParticle() {
+            const particle = document.createElement('div');
+            const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+
+            particle.style.cssText = `
+                position: fixed;
+                width: 10px;
+                height: 10px;
+                background: ${color};
+                top: ${Math.random() * 100}%;
+                left: ${Math.random() * 100}%;
+                border-radius: 50%;
+                pointer-events: none;
+                z-index: 100;
+                opacity: 1;
+                animation: confetti-fall ${1 + Math.random() * 2}s linear forwards;
+            `;
+
+            document.body.appendChild(particle);
+
+            setTimeout(() => {
+                particle.remove();
+            }, 3000);
+        }
+    </script>
 
     {% block scripts %}{% endblock %}
 </body>

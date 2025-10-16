@@ -3,26 +3,77 @@
 {% block title %}Logs - Unraid Dedupe{% endblock %}
 
 {% block content %}
-<div class="logs-page">
-    <h2>Logs</h2>
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <h2 class="text-3xl font-bold text-dark-50">Logs</h2>
+    </div>
 
-    <div class="card">
-        <div class="logs-controls">
-            <button onclick="refreshLogs()" class="btn-secondary">Refresh</button>
-            <label>
-                Lines to show:
-                <select id="lines-select" onchange="refreshLogs()">
-                    <option value="50">50</option>
-                    <option value="100" selected>100</option>
-                    <option value="200">200</option>
-                    <option value="500">500</option>
-                    <option value="1000">1000</option>
-                </select>
-            </label>
+    <div class="bg-dark-800 border border-dark-700 rounded-xl shadow-xl overflow-hidden">
+        <!-- Controls -->
+        <div class="p-4 border-b border-dark-700 bg-dark-900/50">
+            <div class="flex flex-wrap items-center gap-3">
+                <button
+                    onclick="refreshLogs()"
+                    class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Refresh
+                </button>
+
+                <button
+                    id="auto-refresh-toggle"
+                    onclick="toggleAutoRefresh()"
+                    class="px-4 py-2 bg-dark-700 hover:bg-dark-600 text-dark-200 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 flex items-center gap-2">
+                    <svg id="auto-refresh-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span id="auto-refresh-text">Auto-refresh: ON</span>
+                </button>
+
+                <div class="flex items-center gap-2 ml-auto">
+                    <label for="lines-select" class="text-sm text-dark-400">Lines:</label>
+                    <select
+                        id="lines-select"
+                        onchange="refreshLogs()"
+                        class="px-3 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all cursor-pointer">
+                        <option value="50">50</option>
+                        <option value="100" selected>100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                        <option value="1000">1000</option>
+                    </select>
+                </div>
+            </div>
         </div>
 
-        <div id="logs-container" class="logs-container">
-            <p class="loading">Loading logs...</p>
+        <!-- Logs Container -->
+        <div id="logs-container"
+             class="p-4 bg-dark-950 font-mono text-sm max-h-[600px] overflow-y-auto scroll-smooth"
+             onscroll="handleScroll()">
+            <div class="flex items-center justify-center py-12">
+                <div class="flex items-center gap-3 text-dark-400">
+                    <svg class="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Loading logs...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Auto-pause notification -->
+        <div id="paused-notification" class="hidden p-3 bg-yellow-900/30 border-t border-yellow-700/50 text-yellow-300 text-sm flex items-center justify-between">
+            <span class="flex items-center gap-2">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                Auto-refresh paused while viewing logs
+            </span>
+            <button onclick="resumeAutoRefresh()" class="px-3 py-1 bg-yellow-700 hover:bg-yellow-600 rounded transition-colors">
+                Resume
+            </button>
         </div>
     </div>
 </div>
@@ -30,29 +81,90 @@
 
 {% block scripts %}
 <script>
+    let autoRefreshInterval = null;
+    let autoRefreshEnabled = true;
+    let userScrolledUp = false;
+    let lastScrollPosition = 0;
+
     function refreshLogs() {
         const lines = document.getElementById('lines-select').value;
         const container = document.getElementById('logs-container');
+        const wasAtBottom = isScrolledToBottom(container);
 
-        container.innerHTML = '<p class="loading">Loading logs...</p>';
+        // Don't show loading if we're just refreshing
+        if (!container.querySelector('.log-line')) {
+            container.innerHTML = `
+                <div class="flex items-center justify-center py-12">
+                    <div class="flex items-center gap-3 text-dark-400">
+                        <svg class="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Loading logs...</span>
+                    </div>
+                </div>
+            `;
+        }
 
         fetch('/api/logs?lines=' + lines)
             .then(response => response.json())
             .then(data => {
                 if (data.logs && data.logs.length > 0) {
-                    const logsHtml = data.logs.map(line =>
-                        '<div class="log-line">' + escapeHtml(line) + '</div>'
-                    ).join('');
+                    const logsHtml = data.logs.map(line => {
+                        const colorClass = getLogColorClass(line);
+                        return `<div class="log-line py-1 hover:bg-dark-900/50 ${colorClass}">${escapeHtml(line)}</div>`;
+                    }).join('');
                     container.innerHTML = logsHtml;
-                    container.scrollTop = container.scrollHeight;
+
+                    // Only auto-scroll if user was at bottom or this is first load
+                    if (wasAtBottom || !container.querySelector('.log-line')) {
+                        container.scrollTop = container.scrollHeight;
+                    }
                 } else {
-                    container.innerHTML = '<p>No logs available.</p>';
+                    container.innerHTML = `
+                        <div class="flex flex-col items-center justify-center py-12 text-center">
+                            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-dark-800 mb-4">
+                                <svg class="w-8 h-8 text-dark-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                            </div>
+                            <h3 class="text-lg font-semibold text-dark-300 mb-2">No Logs Available</h3>
+                            <p class="text-dark-500">Logs will appear here when operations are performed.</p>
+                        </div>
+                    `;
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                container.innerHTML = '<p class="error">Failed to load logs.</p>';
+                container.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-12 text-center">
+                        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-900/30 mb-4">
+                            <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-semibold text-red-400 mb-2">Failed to Load Logs</h3>
+                        <p class="text-dark-400 mb-4">There was an error loading the logs.</p>
+                        <button onclick="refreshLogs()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">
+                            Retry
+                        </button>
+                    </div>
+                `;
             });
+    }
+
+    function getLogColorClass(line) {
+        const lowerLine = line.toLowerCase();
+        if (lowerLine.includes('error') || lowerLine.includes('fail')) {
+            return 'text-red-400';
+        } else if (lowerLine.includes('warning') || lowerLine.includes('warn')) {
+            return 'text-yellow-400';
+        } else if (lowerLine.includes('success') || lowerLine.includes('complete')) {
+            return 'text-green-400';
+        } else if (lowerLine.includes('info')) {
+            return 'text-blue-400';
+        }
+        return 'text-dark-300';
     }
 
     function escapeHtml(text) {
@@ -61,11 +173,92 @@
         return div.innerHTML;
     }
 
-    // Auto-refresh every 5 seconds
-    setInterval(refreshLogs, 5000);
+    function isScrolledToBottom(element) {
+        return element.scrollHeight - element.scrollTop <= element.clientHeight + 50; // 50px threshold
+    }
+
+    function handleScroll() {
+        const container = document.getElementById('logs-container');
+        const notification = document.getElementById('paused-notification');
+
+        // Check if user scrolled up
+        const currentScroll = container.scrollTop;
+        const isAtBottom = isScrolledToBottom(container);
+
+        if (currentScroll < lastScrollPosition && !isAtBottom) {
+            // User scrolled up
+            userScrolledUp = true;
+            if (autoRefreshEnabled) {
+                pauseAutoRefresh(true);
+                notification.classList.remove('hidden');
+            }
+        } else if (isAtBottom && userScrolledUp) {
+            // User scrolled back to bottom
+            userScrolledUp = false;
+            resumeAutoRefresh();
+        }
+
+        lastScrollPosition = currentScroll;
+    }
+
+    function toggleAutoRefresh() {
+        if (autoRefreshEnabled) {
+            pauseAutoRefresh(false);
+        } else {
+            resumeAutoRefresh();
+        }
+    }
+
+    function pauseAutoRefresh(showNotification = false) {
+        autoRefreshEnabled = false;
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+        }
+
+        const button = document.getElementById('auto-refresh-toggle');
+        const text = document.getElementById('auto-refresh-text');
+        const icon = document.getElementById('auto-refresh-icon');
+
+        button.classList.remove('bg-dark-700', 'hover:bg-dark-600');
+        button.classList.add('bg-yellow-600', 'hover:bg-yellow-700');
+        text.textContent = 'Auto-refresh: OFF';
+        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />';
+    }
+
+    function resumeAutoRefresh() {
+        autoRefreshEnabled = true;
+        userScrolledUp = false;
+        startAutoRefresh();
+
+        const button = document.getElementById('auto-refresh-toggle');
+        const text = document.getElementById('auto-refresh-text');
+        const icon = document.getElementById('auto-refresh-icon');
+        const notification = document.getElementById('paused-notification');
+
+        button.classList.remove('bg-yellow-600', 'hover:bg-yellow-700');
+        button.classList.add('bg-dark-700', 'hover:bg-dark-600');
+        text.textContent = 'Auto-refresh: ON';
+        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />';
+        notification.classList.add('hidden');
+    }
+
+    function startAutoRefresh() {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+        }
+
+        autoRefreshInterval = setInterval(() => {
+            if (autoRefreshEnabled && !userScrolledUp) {
+                refreshLogs();
+            }
+        }, 5000);
+    }
 
     // Load logs on page load
-    document.addEventListener('DOMContentLoaded', refreshLogs);
+    document.addEventListener('DOMContentLoaded', () => {
+        refreshLogs();
+        startAutoRefresh();
+    });
 </script>
 {% endblock %}
-

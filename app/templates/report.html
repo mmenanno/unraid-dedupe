@@ -3,103 +3,574 @@
 {% block title %}Report {{ report_id }} - Unraid Dedupe{% endblock %}
 
 {% block content %}
-<div class="report-detail">
-    <h2>Report: {{ report_id }}</h2>
+<div class="space-y-6">
+    <!-- Breadcrumb Navigation -->
+    <nav aria-label="Breadcrumb" class="flex items-center gap-2 text-sm text-dark-400">
+        <a href="/" class="hover:text-primary-400 transition-colors">Dashboard</a>
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+        <a href="/reports" class="hover:text-primary-400 transition-colors">Reports</a>
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+        <span class="text-dark-300 font-medium" aria-current="page">{{ report_id }}</span>
+    </nav>
 
-    <div class="card">
-        <h3>Summary</h3>
-        <p><strong>Generated:</strong> {{ report.generated_at }}</p>
-
-        <div class="summary">
-            <div class="summary-item">
-                <span class="label">Total Duplicate Sets:</span>
-                <span class="value">{{ report.summary.total_sets }}</span>
-            </div>
-            <div class="summary-item">
-                <span class="label">Same-Disk Duplicates:</span>
-                <span class="value">{{ report.summary.same_disk_sets }}</span>
-            </div>
-            <div class="summary-item">
-                <span class="label">Same-Disk Space:</span>
-                <span class="value">{{ (report.summary.same_disk_space / 1024 / 1024 / 1024) | round(2) }} GB</span>
-            </div>
-            <div class="summary-item">
-                <span class="label">Cross-Disk Duplicates:</span>
-                <span class="value">{{ report.summary.cross_disk_sets }}</span>
-            </div>
-            <div class="summary-item">
-                <span class="label">Cross-Disk Space:</span>
-                <span class="value">{{ (report.summary.cross_disk_space / 1024 / 1024 / 1024) | round(2) }} GB</span>
-            </div>
-            <div class="summary-item">
-                <span class="label">Manual Review Needed:</span>
-                <span class="value">{{ report.summary.manual_review_sets }}</span>
-            </div>
-            <div class="summary-item">
-                <span class="label">Total Space Reclaimable:</span>
-                <span class="value">{{ (report.summary.total_reclaimable / 1024 / 1024 / 1024) | round(2) }} GB</span>
-            </div>
+    <!-- Header with Sticky Actions -->
+    <div class="flex flex-col gap-4">
+        <div class="flex items-center gap-3">
+            <a href="/reports"
+               class="p-2 hover:bg-dark-700 rounded-lg transition-colors"
+               aria-label="Back to reports">
+                <svg class="w-5 h-5 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+            </a>
+            <h2 class="text-3xl font-bold text-dark-50">Report: {{ report_id }}</h2>
         </div>
 
-        <div class="actions">
-            <button onclick="executeReport()" class="btn-primary">Execute Deduplication</button>
-            <a href="/api/reports/{{ report_id }}/download/json" class="btn-secondary">Download JSON</a>
-            <a href="/api/reports/{{ report_id }}/download/markdown" class="btn-secondary">Download Markdown</a>
+        <!-- Sticky Action Bar -->
+        <div id="action-bar" class="sticky top-16 z-40 bg-dark-800/95 backdrop-blur-lg border border-dark-700 rounded-xl p-4 shadow-xl transition-all">
+            <div class="flex flex-wrap gap-3">
+                <button
+                    onclick="executeReport()"
+                    class="flex-1 sm:flex-none px-6 py-2.5 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-dark-800">
+                    <span class="flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        Execute Deduplication
+                    </span>
+                </button>
+                <a href="/api/reports/{{ report_id }}/download/json"
+                   class="flex-1 sm:flex-none px-6 py-2.5 bg-dark-700 hover:bg-dark-600 text-dark-200 font-medium rounded-lg shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-dark-800 text-center">
+                    <span class="flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        JSON
+                    </span>
+                </a>
+                <a href="/api/reports/{{ report_id }}/download/markdown"
+                   class="flex-1 sm:flex-none px-6 py-2.5 bg-dark-700 hover:bg-dark-600 text-dark-200 font-medium rounded-lg shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-dark-800 text-center">
+                    <span class="flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Markdown
+                    </span>
+                </a>
+            </div>
         </div>
     </div>
 
-    <div class="card">
-        <h3>Duplicate Sets (First 50)</h3>
-        <div id="duplicate-sets">
+    <!-- Summary Card -->
+    <div class="bg-dark-800 border border-dark-700 rounded-xl p-6 shadow-xl">
+        <h3 class="text-xl font-semibold text-dark-100 mb-4 pb-3 border-b border-dark-700">Summary</h3>
+
+        <div class="flex items-center gap-2 text-dark-300 text-sm mb-4">
+            <svg class="w-5 h-5 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <span><strong>Generated:</strong> {{ report.generated_at }}</span>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+            <div class="bg-gradient-to-br from-dark-900/80 to-dark-900/40 rounded-lg p-4 border border-dark-700 hover:border-primary-700 transition-colors">
+                <p class="text-dark-400 text-xs uppercase tracking-wider mb-2">Total Sets</p>
+                <p class="text-2xl font-bold bg-gradient-to-br from-primary-400 to-primary-600 bg-clip-text text-transparent">
+                    {{ report.summary.total_sets }}
+                </p>
+            </div>
+            <div class="bg-gradient-to-br from-dark-900/80 to-dark-900/40 rounded-lg p-4 border border-dark-700 hover:border-blue-700 transition-colors">
+                <p class="text-dark-400 text-xs uppercase tracking-wider mb-2">Same-Disk</p>
+                <p class="text-2xl font-bold bg-gradient-to-br from-blue-400 to-blue-600 bg-clip-text text-transparent">
+                    {{ report.summary.same_disk_sets }}
+                </p>
+            </div>
+            <div class="bg-gradient-to-br from-dark-900/80 to-dark-900/40 rounded-lg p-4 border border-dark-700 hover:border-cyan-700 transition-colors">
+                <p class="text-dark-400 text-xs uppercase tracking-wider mb-2">Same-Disk Space</p>
+                <p class="text-lg font-bold bg-gradient-to-br from-cyan-400 to-cyan-600 bg-clip-text text-transparent">
+                    {{ (report.summary.same_disk_space / 1024 / 1024 / 1024) | round(2) }} GB
+                </p>
+            </div>
+            <div class="bg-gradient-to-br from-dark-900/80 to-dark-900/40 rounded-lg p-4 border border-dark-700 hover:border-purple-700 transition-colors">
+                <p class="text-dark-400 text-xs uppercase tracking-wider mb-2">Cross-Disk</p>
+                <p class="text-2xl font-bold bg-gradient-to-br from-purple-400 to-purple-600 bg-clip-text text-transparent">
+                    {{ report.summary.cross_disk_sets }}
+                </p>
+            </div>
+            <div class="bg-gradient-to-br from-dark-900/80 to-dark-900/40 rounded-lg p-4 border border-dark-700 hover:border-violet-700 transition-colors">
+                <p class="text-dark-400 text-xs uppercase tracking-wider mb-2">Cross-Disk Space</p>
+                <p class="text-lg font-bold bg-gradient-to-br from-violet-400 to-violet-600 bg-clip-text text-transparent">
+                    {{ (report.summary.cross_disk_space / 1024 / 1024 / 1024) | round(2) }} GB
+                </p>
+            </div>
+            <div class="bg-gradient-to-br from-dark-900/80 to-dark-900/40 rounded-lg p-4 border border-dark-700 hover:border-yellow-700 transition-colors">
+                <p class="text-dark-400 text-xs uppercase tracking-wider mb-2">Manual Review</p>
+                <p class="text-2xl font-bold bg-gradient-to-br from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
+                    {{ report.summary.manual_review_sets }}
+                </p>
+            </div>
+            <div class="bg-gradient-to-br from-dark-900/80 to-dark-900/40 rounded-lg p-4 border border-dark-700 hover:border-green-700 transition-colors">
+                <p class="text-dark-400 text-xs uppercase tracking-wider mb-2">Total Reclaimable</p>
+                <p class="text-xl font-bold bg-gradient-to-br from-green-400 to-green-600 bg-clip-text text-transparent">
+                    {{ (report.summary.total_reclaimable / 1024 / 1024 / 1024) | round(2) }} GB
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Duplicate Sets Card -->
+    <div class="bg-dark-800 border border-dark-700 rounded-xl p-6 shadow-xl">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 pb-3 border-b border-dark-700">
+            <h3 class="text-xl font-semibold text-dark-100">Duplicate Sets</h3>
+
+            <div class="flex flex-wrap items-center gap-3">
+                <!-- Expand/Collapse All -->
+                <button type="button"
+                        id="expand-collapse-btn"
+                        onclick="toggleAllSets()"
+                        class="px-3 py-1.5 bg-dark-700 hover:bg-dark-600 text-dark-200 rounded-lg transition-colors text-sm flex items-center gap-2">
+                    <svg id="expand-collapse-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                    <span id="expand-collapse-text">Collapse All</span>
+                </button>
+
+                <!-- Filter by action type -->
+                <select id="action-filter"
+                        onchange="filterByAction()"
+                        class="px-3 py-1.5 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all cursor-pointer"
+                        aria-label="Filter by action">
+                    <option value="all">All Actions</option>
+                    <option value="hardlink">Hardlink Only</option>
+                    <option value="manual_review">Manual Review Only</option>
+                    <option value="copy_and_hardlink">Copy & Hardlink</option>
+                </select>
+
+                <span class="text-sm text-dark-400">
+                    <span id="showing-count">Showing 1-{{ [50, report.duplicate_sets|length]|min }} of {{ report.duplicate_sets|length }}</span>
+                </span>
+            </div>
+        </div>
+
+        <div id="duplicate-sets-container" class="space-y-4">
             {% for ds in report.duplicate_sets[:50] %}
-            <div class="duplicate-set">
-                <h4>Set {{ loop.index }}: {{ ds.hash[:12]}}... ({{ (ds.size / 1024 / 1024) | round(2) }} MB) - {{ ds.action }}</h4>
-                <p><strong>Keeper:</strong> <code>{{ ds.keeper.path if ds.keeper else 'N/A' }}</code></p>
-                <p><strong>Duplicates:</strong></p>
-                <ul>
-                {% for file in ds.files %}
-                    {% if not ds.keeper or file.path != ds.keeper.path %}
-                    <li><code>{{ file.path }}</code> ({{ file.disk or 'unknown' }})</li>
-                    {% endif %}
-                {% endfor %}
-                </ul>
+            <div class="duplicate-set-item bg-gradient-to-r from-dark-900/50 to-dark-800/30 border border-dark-700 rounded-lg overflow-hidden hover:border-primary-700 transition-all hover:shadow-lg">
+                <button type="button"
+                        onclick="toggleDuplicateSet(this)"
+                        class="w-full px-5 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 hover:bg-dark-900/30 transition-colors text-left"
+                        aria-expanded="true"
+                        aria-controls="set-{{ loop.index }}">
+                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 flex-1">
+                        <h4 class="text-lg font-semibold text-primary-400 flex items-center gap-2">
+                            Set {{ loop.index }}
+                            <svg class="w-5 h-5 text-dark-400 transition-transform set-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </h4>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-dark-700 text-dark-300 border border-dark-600">
+                                {{ ds.hash[:12]}}...
+                            </span>
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-primary-900/30 text-primary-300 border border-primary-700/50">
+                                {{ (ds.size / 1024 / 1024) | round(2) }} MB
+                            </span>
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium
+                                {% if ds.action == 'hardlink' %}bg-green-900/30 text-green-300 border border-green-700/50
+                                {% elif ds.action == 'manual_review' %}bg-yellow-900/30 text-yellow-300 border border-yellow-700/50
+                                {% else %}bg-blue-900/30 text-blue-300 border border-blue-700/50{% endif %}"
+                                data-tooltip="{% if ds.action == 'hardlink' %}This duplicate is on the same disk and can be safely hardlinked.
+                                {% elif ds.action == 'manual_review' %}This duplicate requires manual review before processing.
+                                {% else %}This duplicate requires copying to the same disk before hardlinking.{% endif %}">
+                                {{ ds.action }}
+                            </span>
+                        </div>
+                    </div>
+                </button>
+
+                <div id="set-{{ loop.index }}" class="px-5 pb-5 space-y-2">
+                    <div class="bg-dark-900/50 rounded-lg p-3 border border-dark-700">
+                        <div class="flex items-center justify-between mb-2">
+                            <p class="text-xs text-dark-400 uppercase tracking-wider">Keeper</p>
+                            <button onclick="copyToClipboard('{{ ds.keeper.path if ds.keeper else '' }}')"
+                                    class="p-1 hover:bg-dark-800 rounded transition-colors"
+                                    title="Copy to clipboard"
+                                    aria-label="Copy keeper path to clipboard">
+                                <svg class="w-4 h-4 text-dark-400 hover:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                            </button>
+                        </div>
+                        <code class="text-sm text-green-400 font-mono break-all">
+                            {{ ds.keeper.path if ds.keeper else 'N/A' }}
+                        </code>
+                    </div>
+
+                    <div class="bg-dark-900/50 rounded-lg p-3 border border-dark-700">
+                        <p class="text-xs text-dark-400 uppercase tracking-wider mb-2">Duplicates</p>
+                        <ul class="space-y-1.5">
+                        {% for file in ds.files %}
+                            {% if not ds.keeper or file.path != ds.keeper.path %}
+                            <li class="flex items-start gap-2 text-sm group">
+                                <span class="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-red-500 mt-2"></span>
+                                <div class="flex-1 min-w-0">
+                                    <code class="text-dark-300 font-mono break-all">{{ file.path }}</code>
+                                    <span class="text-dark-500 ml-2">({{ file.disk or 'unknown' }})</span>
+                                </div>
+                                <button onclick="copyToClipboard('{{ file.path }}')"
+                                        class="opacity-0 group-hover:opacity-100 p-1 hover:bg-dark-800 rounded transition-all"
+                                        title="Copy to clipboard"
+                                        aria-label="Copy duplicate path to clipboard">
+                                    <svg class="w-4 h-4 text-dark-400 hover:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                    </svg>
+                                </button>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+                        </ul>
+                    </div>
+                </div>
             </div>
             {% endfor %}
-
-            {% if report.duplicate_sets | length > 50 %}
-            <p class="note">Showing first 50 of {{ report.duplicate_sets | length }} sets. Download full report for complete details.</p>
-            {% endif %}
         </div>
+
+        {% if report.duplicate_sets | length > 50 %}
+        <div class="mt-6 pt-6 border-t border-dark-700">
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <p class="text-sm text-dark-400">
+                    Showing first 50 of {{ report.duplicate_sets | length }} sets.
+                </p>
+                <div class="flex gap-2">
+                    <button
+                        id="load-more-btn"
+                        onclick="loadMoreSets()"
+                        class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        Load More
+                    </button>
+                    <a href="/api/reports/{{ report_id }}/download/json"
+                       class="px-4 py-2 bg-dark-700 hover:bg-dark-600 text-dark-200 font-medium rounded-lg transition-colors">
+                        Download Full Report
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    function executeReport() {
-        if (!confirm('Are you sure you want to execute this deduplication? This will modify files on your system.')) {
+    let currentPage = 1;
+    const itemsPerPage = 50;
+    const allSets = {{ report.duplicate_sets | tojson }};
+    let filteredSets = [...allSets];
+    let currentFilter = 'all';
+
+    function copyToClipboard(text) {
+        if (!text || text === 'N/A') {
+            showToast('No path to copy', 'warning');
             return;
         }
 
-        fetch('/api/reports/{{ report_id }}/execute', { method: 'POST' })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Deduplication completed!\n\n' +
-                        'Processed: ' + data.stats.processed + '\n' +
-                        'Succeeded: ' + data.stats.succeeded + '\n' +
-                        'Failed: ' + data.stats.failed + '\n' +
-                        'Skipped: ' + data.stats.skipped + '\n' +
-                        'Space Freed: ' + (data.stats.space_freed / 1024 / 1024 / 1024).toFixed(2) + ' GB');
-                } else {
-                    alert('Execution failed: ' + data.error);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text)
+                .then(() => {
+                    showToast('Path copied to clipboard!', 'success');
+                })
+                .catch(err => {
+                    console.error('Failed to copy:', err);
+                    fallbackCopy(text);
+                });
+        } else {
+            fallbackCopy(text);
+        }
+    }
+
+    function fallbackCopy(text) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-9999px';
+        document.body.appendChild(textArea);
+        textArea.select();
+
+        try {
+            document.execCommand('copy');
+            showToast('Path copied to clipboard!', 'success');
+        } catch (err) {
+            console.error('Fallback copy failed:', err);
+            showToast('Failed to copy path', 'error');
+        }
+
+        document.body.removeChild(textArea);
+    }
+
+    function toggleDuplicateSet(button) {
+        const content = button.nextElementSibling;
+        const chevron = button.querySelector('.set-chevron');
+        const isExpanded = button.getAttribute('aria-expanded') === 'true';
+
+        if (isExpanded) {
+            content.classList.add('hidden');
+            button.setAttribute('aria-expanded', 'false');
+            chevron.style.transform = 'rotate(-90deg)';
+        } else {
+            content.classList.remove('hidden');
+            button.setAttribute('aria-expanded', 'true');
+            chevron.style.transform = 'rotate(0)';
+        }
+    }
+
+    function toggleAllSets() {
+        const buttons = document.querySelectorAll('.duplicate-set-item button[aria-expanded]');
+        const btn = document.getElementById('expand-collapse-btn');
+        const icon = document.getElementById('expand-collapse-icon');
+        const text = document.getElementById('expand-collapse-text');
+
+        // Check if any are expanded
+        const anyExpanded = Array.from(buttons).some(b => b.getAttribute('aria-expanded') === 'true');
+
+        buttons.forEach(button => {
+            const content = button.nextElementSibling;
+            const chevron = button.querySelector('.set-chevron');
+
+            if (anyExpanded) {
+                // Collapse all
+                content.classList.add('hidden');
+                button.setAttribute('aria-expanded', 'false');
+                chevron.style.transform = 'rotate(-90deg)';
+            } else {
+                // Expand all
+                content.classList.remove('hidden');
+                button.setAttribute('aria-expanded', 'true');
+                chevron.style.transform = 'rotate(0)';
+            }
+        });
+
+        // Update button text
+        if (anyExpanded) {
+            text.textContent = 'Expand All';
+            icon.style.transform = 'rotate(-90deg)';
+        } else {
+            text.textContent = 'Collapse All';
+            icon.style.transform = 'rotate(0)';
+        }
+    }
+
+    function filterByAction() {
+        const filter = document.getElementById('action-filter').value;
+        currentFilter = filter;
+        currentPage = 1; // Reset to first page
+
+        if (filter === 'all') {
+            filteredSets = [...allSets];
+        } else {
+            filteredSets = allSets.filter(ds => ds.action === filter);
+        }
+
+        // Clear and re-render
+        const container = document.getElementById('duplicate-sets-container');
+        container.innerHTML = '';
+
+        // Render first page of filtered results
+        const end = Math.min(itemsPerPage, filteredSets.length);
+        for (let i = 0; i < end; i++) {
+            const setDiv = createDuplicateSetElement(filteredSets[i], i + 1);
+            container.appendChild(setDiv);
+        }
+
+        // Update showing count
+        document.getElementById('showing-count').textContent =
+            `Showing 1-${end} of ${filteredSets.length}`;
+
+        // Update load more button
+        const loadMoreBtn = document.getElementById('load-more-btn');
+        if (loadMoreBtn) {
+            if (end >= filteredSets.length) {
+                loadMoreBtn.parentElement.style.display = 'none';
+            } else {
+                loadMoreBtn.parentElement.style.display = 'flex';
+                loadMoreBtn.parentElement.querySelector('p').textContent =
+                    `Showing first ${itemsPerPage} of ${filteredSets.length} sets.`;
+            }
+        }
+    }
+
+    function loadMoreSets() {
+        currentPage++;
+        const start = (currentPage - 1) * itemsPerPage;
+        const end = Math.min(start + itemsPerPage, filteredSets.length);
+
+        const container = document.getElementById('duplicate-sets-container');
+        const loadMoreBtn = document.getElementById('load-more-btn');
+
+        for (let i = start; i < end; i++) {
+            const ds = filteredSets[i];
+            const setDiv = createDuplicateSetElement(ds, i + 1);
+            container.appendChild(setDiv);
+        }
+
+        // Update showing count
+        document.getElementById('showing-count').textContent =
+            `Showing 1-${end} of ${filteredSets.length}`;
+
+        // Hide load more if we've shown all
+        if (end >= filteredSets.length) {
+            loadMoreBtn.parentElement.style.display = 'none';
+        }
+    }
+
+    function createDuplicateSetElement(ds, index) {
+        const div = document.createElement('div');
+        div.className = 'duplicate-set-item bg-gradient-to-r from-dark-900/50 to-dark-800/30 border border-dark-700 rounded-lg overflow-hidden hover:border-primary-700 transition-all hover:shadow-lg';
+
+        const actionClass = ds.action === 'hardlink' ? 'bg-green-900/30 text-green-300 border-green-700/50' :
+                           ds.action === 'manual_review' ? 'bg-yellow-900/30 text-yellow-300 border-yellow-700/50' :
+                           'bg-blue-900/30 text-blue-300 border-blue-700/50';
+
+        const duplicatesHtml = ds.files
+                        .filter(f => !ds.keeper || f.path !== ds.keeper.path)
+                        .map(f => `
+                        <li class="flex items-start gap-2 text-sm group">
+                            <span class="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-red-500 mt-2"></span>
+                            <div class="flex-1 min-w-0">
+                                <code class="text-dark-300 font-mono break-all">${f.path}</code>
+                                <span class="text-dark-500 ml-2">(${f.disk || 'unknown'})</span>
+                            </div>
+                            <button onclick="copyToClipboard('${f.path.replace(/'/g, "\\'")}')"
+                                    class="opacity-0 group-hover:opacity-100 p-1 hover:bg-dark-800 rounded transition-all"
+                                    title="Copy to clipboard"
+                                    aria-label="Copy duplicate path to clipboard">
+                                <svg class="w-4 h-4 text-dark-400 hover:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                            </button>
+                        </li>
+            `).join('');
+
+        const actionTooltip = ds.action === 'hardlink'
+            ? 'This duplicate is on the same disk and can be safely hardlinked.'
+            : ds.action === 'manual_review'
+            ? 'This duplicate requires manual review before processing.'
+            : 'This duplicate requires copying to the same disk before hardlinking.';
+
+        div.innerHTML = `
+            <button type="button"
+                    onclick="toggleDuplicateSet(this)"
+                    class="w-full px-5 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 hover:bg-dark-900/30 transition-colors text-left"
+                    aria-expanded="true"
+                    aria-controls="set-content-${index}">
+                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 flex-1">
+                    <h4 class="text-lg font-semibold text-primary-400 flex items-center gap-2">
+                        Set ${index}
+                        <svg class="w-5 h-5 text-dark-400 transition-transform set-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </h4>
+                <div class="flex flex-wrap gap-2">
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-dark-700 text-dark-300 border border-dark-600">
+                        ${ds.hash.substring(0, 12)}...
+                    </span>
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-primary-900/30 text-primary-300 border border-primary-700/50">
+                            ${(ds.size / 1024 / 1024).toFixed(2)} MB
+                        </span>
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${actionClass}"
+                              data-tooltip="${actionTooltip}">
+                            ${ds.action}
+                        </span>
+                    </div>
+                </div>
+            </button>
+            <div id="set-content-${index}" class="px-5 pb-5 space-y-2">
+                <div class="bg-dark-900/50 rounded-lg p-3 border border-dark-700">
+                    <div class="flex items-center justify-between mb-1">
+                        <p class="text-xs text-dark-400 uppercase tracking-wider">Keeper</p>
+                        <button onclick="copyToClipboard('${ds.keeper ? ds.keeper.path.replace(/'/g, "\\'") : ''}')"
+                                class="p-1 hover:bg-dark-800 rounded transition-colors"
+                                title="Copy to clipboard">
+                            <svg class="w-4 h-4 text-dark-400 hover:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <code class="text-sm text-green-400 font-mono break-all">
+                        ${ds.keeper ? ds.keeper.path : 'N/A'}
+                    </code>
+                </div>
+                <div class="bg-dark-900/50 rounded-lg p-3 border border-dark-700">
+                    <p class="text-xs text-dark-400 uppercase tracking-wider mb-2">Duplicates</p>
+                    <ul class="space-y-1.5">${duplicatesHtml}</ul>
+                </div>
+            </div>
+        `;
+
+        return div;
+    }
+
+    function executeReport() {
+        showModal(
+            'Execute Deduplication?',
+            'This will modify files on your system by creating hardlinks and removing duplicates. This action cannot be undone. Are you sure you want to continue?',
+            [
+                {
+                    text: 'Cancel',
+                    primary: false
+                },
+                {
+                    text: 'Execute',
+                    danger: true,
+                    onClick: () => {
+                        // Show loading toast
+                        showToast('Starting deduplication...', 'info', 0);
+
+                        fetch('/api/reports/{{ report_id }}/execute', { method: 'POST' })
+                            .then(response => response.json())
+                            .then(data => {
+                                // Remove loading toast
+                                document.querySelectorAll('.toast-notification').forEach(t => t.remove());
+
+                                if (data.success) {
+                                    // Trigger confetti celebration!
+                                    if (typeof triggerConfetti === 'function') {
+                                        triggerConfetti();
+                                    }
+
+                                    const message = `Deduplication completed!\n\n` +
+                                        `Processed: ${data.stats.processed}\n` +
+                                        `Succeeded: ${data.stats.succeeded}\n` +
+                                        `Failed: ${data.stats.failed}\n` +
+                                        `Skipped: ${data.stats.skipped}\n` +
+                                        `Space Freed: ${(data.stats.space_freed / 1024 / 1024 / 1024).toFixed(2)} GB`;
+
+                                    showModal('🎉 Success!', message, [
+                                        {
+                                            text: 'View Logs',
+                                            primary: true,
+                                            onClick: () => window.location.href = '/logs'
+                                        },
+                                        {
+                                            text: 'Close',
+                                            primary: false
+                                        }
+                                    ]);
+                                } else {
+                                    showToast('Execution failed: ' + data.error, 'error');
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error:', error);
+                                document.querySelectorAll('.toast-notification').forEach(t => t.remove());
+                                showToast('Failed to execute deduplication', 'error');
+                            });
+                    }
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Failed to execute deduplication');
-            });
+            ]
+        );
     }
 </script>
 {% endblock %}
-

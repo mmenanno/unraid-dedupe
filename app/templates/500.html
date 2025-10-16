@@ -1,15 +1,81 @@
 {% extends "base.html" %}
 
-{% block title %}500 Server Error - Unraid Dedupe{% endblock %}
+{% block title %}Server Error - Unraid Dedupe{% endblock %}
 
 {% block content %}
-<div class="error-page">
-    <div class="card">
-        <h2>500 - Server Error</h2>
-        <p>Something went wrong on our end. Please try again later.</p>
-        <p>Check the <a href="/logs">logs</a> for more information.</p>
-        <a href="/" class="btn-primary">Go to Dashboard</a>
+<div class="flex items-center justify-center min-h-[60vh]">
+    <div class="text-center max-w-2xl px-4">
+        <!-- 500 Icon -->
+        <div class="inline-flex items-center justify-center w-32 h-32 rounded-full bg-gradient-to-br from-red-900/30 to-red-800/20 border border-red-700/50 mb-8">
+            <svg class="w-16 h-16 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+        </div>
+
+        <!-- Error Code -->
+        <h1 class="text-9xl font-bold bg-gradient-to-r from-red-400 to-red-600 bg-clip-text text-transparent mb-4">
+            500
+        </h1>
+
+        <!-- Error Message -->
+        <h2 class="text-3xl font-bold text-dark-100 mb-4">
+            Internal Server Error
+        </h2>
+
+        <p class="text-lg text-dark-400 mb-8 max-w-md mx-auto">
+            Something went wrong on our end. We're working to fix it. Please try again in a few moments.
+        </p>
+
+        <!-- Actions -->
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+            <button
+                onclick="window.location.reload()"
+                class="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-dark-900">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Retry
+            </button>
+            <a href="/"
+               class="inline-flex items-center justify-center gap-2 px-6 py-3 bg-dark-700 hover:bg-dark-600 text-dark-200 font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-dark-900">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                Go to Dashboard
+            </a>
+        </div>
+
+        <!-- Help Section -->
+        <div class="mt-12 pt-8 border-t border-dark-700">
+            <div class="bg-dark-800 border border-dark-700 rounded-lg p-6 text-left">
+                <h3 class="text-lg font-semibold text-dark-100 mb-3 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-primary-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                    </svg>
+                    What can you do?
+                </h3>
+                <ul class="space-y-2 text-dark-300">
+                    <li class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-primary-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                        Try refreshing the page to see if the issue resolves
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-primary-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                        Check the <a href="/logs" class="text-primary-400 hover:text-primary-300 underline">logs page</a> for more details
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-primary-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                        If the problem persists, check your Docker container logs
+                    </li>
+                </ul>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
-

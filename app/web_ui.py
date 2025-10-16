@@ -72,6 +72,7 @@ class ScanStatus:
         self.progress = 0
         self.message = 'Idle'
         self.report_id = None
+        self.cancel_requested = False
 
     def to_dict(self):
         """Convert to dictionary for JSON responses"""
@@ -80,7 +81,8 @@ class ScanStatus:
                 'running': self.running,
                 'progress': self.progress,
                 'message': self.message,
-                'report_id': self.report_id
+                'report_id': self.report_id,
+                'cancel_requested': self.cancel_requested
             }
 
     def reset(self):
@@ -90,6 +92,18 @@ class ScanStatus:
             self.progress = 0
             self.message = 'Idle'
             self.report_id = None
+            self.cancel_requested = False
+
+    def request_cancel(self):
+        """Request scan cancellation"""
+        with self._lock:
+            self.cancel_requested = True
+            logger.info("Scan cancellation requested")
+
+    def is_cancel_requested(self):
+        """Check if cancellation has been requested"""
+        with self._lock:
+            return self.cancel_requested
 
     def set_running(self, running):
         """Thread-safe setter for running state"""
@@ -142,20 +156,31 @@ def trigger_scan() -> bool:
     def run_scan():
         global scan_status
         try:
+            scan_status.reset()  # Reset status including cancel flag
             scan_status.set_running(True)
             scan_status.set_progress(0, 'Starting scan...')
 
             logger.info("Starting deduplication scan")
 
             def update_progress(percent: int, message: str):
+                # Check for cancellation
+                if scan_status.is_cancel_requested():
+                    raise InterruptedError("Scan cancelled by user")
                 scan_status.set_progress(percent, message)
 
             report_id = manager.scan(progress_callback=update_progress)
 
-            scan_status.set_progress(100, 'Scan complete')
-            scan_status.set_report_id(report_id)
-            logger.info("Scan completed: %s", report_id)
+            if scan_status.is_cancel_requested():
+                scan_status.set_progress(0, 'Scan cancelled')
+                logger.info("Scan was cancelled")
+            else:
+                scan_status.set_progress(100, 'Scan complete')
+                scan_status.set_report_id(report_id)
+                logger.info("Scan completed: %s", report_id)
 
+        except InterruptedError as e:
+            logger.info("Scan interrupted: %s", e)
+            scan_status.set_progress(0, str(e))
         except Exception as e:
             logger.error("Scan failed: %s", e, exc_info=True)
             scan_status.set_progress(0, f'Scan failed: {str(e)}')
@@ -166,6 +191,18 @@ def trigger_scan() -> bool:
 
     thread = threading.Thread(target=run_scan, daemon=False)
     thread.start()
+    return True
+
+
+def cancel_scan() -> bool:
+    """Request cancellation of running scan"""
+    global scan_status
+
+    if not scan_status.get_running():
+        logger.warning("No scan running to cancel")
+        return False
+
+    scan_status.request_cancel()
     return True
 
 
@@ -210,6 +247,16 @@ def get_scan_status() -> Tuple[Response, int]:
     return jsonify(scan_status.to_dict()), 200
 
 
+@app.route('/api/scan/cancel', methods=['POST'])
+@limiter.limit("10 per hour")
+def cancel_scan_endpoint() -> Tuple[Response, int]:
+    """Cancel running scan"""
+    if cancel_scan():
+        return jsonify({'success': True, 'message': 'Cancellation requested'}), 200
+    else:
+        return jsonify({'success': False, 'message': 'No scan running'}), 400
+
+
 @app.route('/api/reports')
 def list_reports() -> Tuple[Response, int]:
     """List all reports with pagination support"""
@@ -252,6 +299,28 @@ def get_report(report_id: str) -> Tuple[Response, int]:
         ]
 
     return jsonify(report), 200
+
+
+@app.route('/api/reports/<report_id>', methods=['DELETE'])
+@limiter.limit("10 per hour")
+def delete_report(report_id: str) -> Tuple[Response, int]:
+    """Delete a report"""
+    if not re.match(r'^[a-zA-Z0-9_-]+$', report_id):
+        return jsonify({'error': 'Invalid report ID'}), 400
+
+    report_dir = os.path.join(REPORTS_DIR, report_id)
+
+    if not os.path.exists(report_dir):
+        return jsonify({'error': 'Report not found'}), 404
+
+    try:
+        import shutil
+        shutil.rmtree(report_dir)
+        logger.info(f"Deleted report: {report_id}")
+        return jsonify({'success': True, 'message': 'Report deleted'}), 200
+    except Exception as e:
+        logger.error(f"Failed to delete report {report_id}: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/reports')
@@ -471,6 +540,134 @@ def server_error(e):
 
 
 # Health check endpoint
+@app.route('/api/version')
+def get_version() -> Tuple[Response, int]:
+    """Get application version"""
+    version_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VERSION')
+    try:
+        with open(version_file, 'r') as f:
+            version = f.read().strip()
+        return jsonify({'version': version}), 200
+    except Exception as e:
+        logger.error(f"Failed to read version: {e}")
+        return jsonify({'version': 'unknown'}), 200
+
+
+@app.route('/api/stats/overview')
+def get_stats_overview() -> Tuple[Response, int]:
+    """Get aggregate statistics across all reports"""
+    try:
+        reports = manager.list_reports()
+
+        if not reports:
+            return jsonify({
+                'total_reports': 0,
+                'total_space_saved': 0,
+                'total_duplicate_sets': 0,
+                'recent_scans': []
+            }), 200
+
+        total_space = sum(r.get('summary', {}).get('total_reclaimable', 0) for r in reports)
+        total_sets = sum(r.get('summary', {}).get('total_sets', 0) for r in reports)
+
+        # Get recent activity (last 5 reports)
+        recent = []
+        for r in reports[:5]:
+            recent.append({
+                'id': r.get('id'),
+                'generated_at': r.get('generated_at'),
+                'total_sets': r.get('summary', {}).get('total_sets', 0),
+                'reclaimable_space': r.get('summary', {}).get('total_reclaimable', 0)
+            })
+
+        return jsonify({
+            'total_reports': len(reports),
+            'total_space_found': total_space,
+            'total_duplicate_sets': total_sets,
+            'recent_scans': recent
+        }), 200
+    except Exception as e:
+        logger.error(f"Failed to get stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/config/validate', methods=['POST'])
+def validate_config() -> Tuple[Response, int]:
+    """Validate configuration without saving"""
+    try:
+        config = request.json
+        if not config:
+            return jsonify({'valid': False, 'errors': ['No configuration provided']}), 400
+
+        errors = []
+        warnings = []
+
+        # Validate scan paths
+        if not config.get('scan_paths'):
+            errors.append('At least one scan path is required')
+        else:
+            for path in config.get('scan_paths', []):
+                if not os.path.exists(path):
+                    warnings.append(f'Path does not exist: {path}')
+                elif not os.path.isdir(path):
+                    errors.append(f'Path is not a directory: {path}')
+                elif not os.access(path, os.R_OK):
+                    errors.append(f'Path is not readable: {path}')
+
+        # Validate safety options
+        safety = config.get('safety', {})
+        cross_disk_action = safety.get('cross_disk_action', 'skip')
+        if cross_disk_action == 'delete_duplicate':
+            warnings.append('Cross-disk delete is enabled - this will permanently delete files!')
+
+        # Validate path preferences
+        for pref in config.get('path_preferences', []):
+            if not pref.get('pattern'):
+                errors.append('Path preference pattern cannot be empty')
+            if not isinstance(pref.get('priority'), int) or pref.get('priority') < 1:
+                errors.append('Path preference priority must be a positive integer')
+
+        return jsonify({
+            'valid': len(errors) == 0,
+            'errors': errors,
+            'warnings': warnings
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Failed to validate config: {e}")
+        return jsonify({'valid': False, 'errors': [str(e)]}), 500
+
+
+@app.route('/api/schedule/preview')
+def preview_schedule() -> Tuple[Response, int]:
+    """Preview next run times for a cron expression"""
+    try:
+        cron_expr = request.args.get('cron', '0 2 * * 0')
+
+        from croniter import croniter
+        from datetime import datetime
+
+        if not croniter.is_valid(cron_expr):
+            return jsonify({'valid': False, 'error': 'Invalid cron expression'}), 400
+
+        base = datetime.now()
+        cron = croniter(cron_expr, base)
+
+        next_runs = []
+        for _ in range(5):
+            next_run = cron.get_next(datetime)
+            next_runs.append(next_run.strftime('%Y-%m-%d %H:%M:%S'))
+
+        return jsonify({
+            'valid': True,
+            'next_runs': next_runs
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Failed to preview schedule: {e}")
+        return jsonify({'valid': False, 'error': str(e)}), 400
+
+
 @app.route('/health')
 def health() -> Tuple[Response, int]:
     """Health check endpoint with dependency verification"""
