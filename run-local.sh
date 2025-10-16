@@ -27,6 +27,12 @@ LOCAL_DATA_DIR="$SCRIPT_DIR/data"
 mkdir -p "$LOCAL_DATA_DIR/config" "$LOCAL_DATA_DIR/reports" "$LOCAL_DATA_DIR/logs"
 export DATA_DIR="$LOCAL_DATA_DIR"
 
+# Copy default config if it doesn't exist
+if [ ! -f "$LOCAL_DATA_DIR/config/dedupe_config.yaml" ]; then
+    echo "📋 Copying default configuration..."
+    cp "$SCRIPT_DIR/config/dedupe_config.yaml" "$LOCAL_DATA_DIR/config/dedupe_config.yaml"
+fi
+
 # Set SECRET_KEY if not already set
 if [ -z "$SECRET_KEY" ]; then
     echo "🔑 Generating temporary SECRET_KEY for this session..."
@@ -36,12 +42,15 @@ fi
 # Set Flask debug mode for local development
 export FLASK_DEBUG=true
 
+# Set Flask port for local development (avoid AirPlay conflict on macOS)
+export FLASK_RUN_PORT=5001
+
 # Change to app directory and run
 cd app || exit 1
 echo ""
 echo "🚀 Starting Unraid Dedupe Manager (Development Mode)..."
-echo "📍 Access the UI at http://localhost:5000"
+echo "📍 Access the UI at http://localhost:5001"
 echo "📁 Data directory: $DATA_DIR"
 echo ""
-python3 web_ui.py
+python3 -m flask run --host=0.0.0.0 --port=5001
 
