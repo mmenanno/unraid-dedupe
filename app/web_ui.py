@@ -6,28 +6,38 @@ Flask Web UI for Unraid Deduplication Manager
 import json
 import logging
 import os
+import re
+import secrets
 import threading
 from datetime import datetime
-from pathlib import Path
+from typing import Tuple, Dict, Any
 
 import yaml
-from flask import Flask, render_template, jsonify, request, send_file
+from flask import Flask, render_template, jsonify, request, send_file, Response
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 from dedupe_manager import DedupeManager
 from scheduler import ScanScheduler, get_cron_presets
 
 
+# Configure paths from environment variables
+DATA_DIR = os.environ.get('DATA_DIR', '/data')
+CONFIG_DIR = os.path.join(DATA_DIR, 'config')
+REPORTS_DIR = os.path.join(DATA_DIR, 'reports')
+LOGS_DIR = os.path.join(DATA_DIR, 'logs')
+
 # Ensure data directories exist before logging setup
-os.makedirs('/data/config', exist_ok=True)
-os.makedirs('/data/reports', exist_ok=True)
-os.makedirs('/data/logs', exist_ok=True)
+os.makedirs(CONFIG_DIR, exist_ok=True)
+os.makedirs(REPORTS_DIR, exist_ok=True)
+os.makedirs(LOGS_DIR, exist_ok=True)
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/data/logs/web_ui.log'),
+        logging.FileHandler(os.path.join(LOGS_DIR, 'web_ui.log')),
         logging.StreamHandler()
     ]
 )
@@ -36,63 +46,125 @@ logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+
+# Generate random secret key if not provided
+secret_key = os.environ.get('SECRET_KEY')
+if not secret_key:
+    secret_key = secrets.token_hex(32)
+    logger.warning("SECRET_KEY not set! Using randomly generated key. Sessions will not persist across restarts.")
+    logger.warning("Set SECRET_KEY environment variable for production use.")
+app.config['SECRET_KEY'] = secret_key
+
+# Configure rate limiting
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per hour", "50 per minute"],
+    storage_uri="memory://"
+)
 
 
-# Global state
+class ScanStatus:
+    """Encapsulates scan status state with thread safety"""
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.running = False
+        self.progress = 0
+        self.message = 'Idle'
+        self.report_id = None
+
+    def to_dict(self):
+        """Convert to dictionary for JSON responses"""
+        with self._lock:
+            return {
+                'running': self.running,
+                'progress': self.progress,
+                'message': self.message,
+                'report_id': self.report_id
+            }
+
+    def reset(self):
+        """Reset to initial state"""
+        with self._lock:
+            self.running = False
+            self.progress = 0
+            self.message = 'Idle'
+            self.report_id = None
+
+    def set_running(self, running):
+        """Thread-safe setter for running state"""
+        with self._lock:
+            self.running = running
+
+    def set_progress(self, progress, message):
+        """Thread-safe setter for progress"""
+        with self._lock:
+            self.progress = progress
+            self.message = message
+
+    def set_report_id(self, report_id):
+        """Thread-safe setter for report_id"""
+        with self._lock:
+            self.report_id = report_id
+
+    def get_running(self):
+        """Thread-safe getter for running state"""
+        with self._lock:
+            return self.running
+
+
+# Global state with thread safety
 manager = DedupeManager()
 scheduler = None
-scan_status = {
-    'running': False,
-    'progress': 0,
-    'message': 'Idle',
-    'report_id': None
-}
+scan_status = ScanStatus()
+scan_lock = threading.Lock()
 
 
-def scan_callback():
+def scan_callback() -> None:
     """Callback function for scheduled scans"""
     logger.info("Scheduled scan triggered")
     trigger_scan()
 
 
-def trigger_scan():
+def trigger_scan() -> bool:
     """Trigger a scan in background thread"""
     global scan_status
 
-    if scan_status['running']:
+    if not scan_lock.acquire(blocking=False):
+        logger.warning("Scan already running")
+        return False
+
+    if scan_status.get_running():
+        scan_lock.release()
         logger.warning("Scan already running")
         return False
 
     def run_scan():
         global scan_status
         try:
-            scan_status['running'] = True
-            scan_status['progress'] = 0
-            scan_status['message'] = 'Starting scan...'
+            scan_status.set_running(True)
+            scan_status.set_progress(0, 'Starting scan...')
 
             logger.info("Starting deduplication scan")
 
-            # Progress callback to update scan status
             def update_progress(percent: int, message: str):
-                scan_status['progress'] = percent
-                scan_status['message'] = message
+                scan_status.set_progress(percent, message)
 
             report_id = manager.scan(progress_callback=update_progress)
 
-            scan_status['progress'] = 100
-            scan_status['message'] = 'Scan complete'
-            scan_status['report_id'] = report_id
-            logger.info(f"Scan completed: {report_id}")
+            scan_status.set_progress(100, 'Scan complete')
+            scan_status.set_report_id(report_id)
+            logger.info("Scan completed: %s", report_id)
 
         except Exception as e:
-            logger.error(f"Scan failed: {e}")
-            scan_status['message'] = f'Scan failed: {str(e)}'
+            logger.error("Scan failed: %s", e, exc_info=True)
+            scan_status.set_progress(0, f'Scan failed: {str(e)}')
 
         finally:
-            scan_status['running'] = False
+            scan_status.set_running(False)
+            scan_lock.release()
 
-    thread = threading.Thread(target=run_scan, daemon=True)
+    thread = threading.Thread(target=run_scan, daemon=False)
     thread.start()
     return True
 
@@ -102,7 +174,8 @@ scheduler = ScanScheduler(scan_callback)
 
 # Log startup information
 logger.info("Unraid Deduplication Manager initialized")
-logger.info(f"Running in {'production' if not os.environ.get('FLASK_DEBUG', 'False').lower() == 'true' else 'development'} mode")
+mode = 'production' if not os.environ.get('FLASK_DEBUG', 'False').lower() == 'true' else 'development'
+logger.info("Running in %s mode", mode)
 
 
 # Routes
@@ -117,40 +190,68 @@ def index():
         'index.html',
         latest_report=latest_report,
         schedule_config=schedule_config,
-        scan_running=scan_status['running']
+        scan_running=scan_status.get_running()
     )
 
 
 @app.route('/api/scan/start', methods=['POST'])
-def start_scan():
+@limiter.limit("10 per hour")
+def start_scan() -> Tuple[Response, int]:
     """Start a new scan"""
     if trigger_scan():
-        return jsonify({'success': True, 'message': 'Scan started'})
+        return jsonify({'success': True, 'message': 'Scan started'}), 200
     else:
         return jsonify({'success': False, 'message': 'Scan already running'}), 400
 
 
 @app.route('/api/scan/status')
-def get_scan_status():
+def get_scan_status() -> Tuple[Response, int]:
     """Get current scan status"""
-    return jsonify(scan_status)
+    return jsonify(scan_status.to_dict()), 200
 
 
 @app.route('/api/reports')
-def list_reports():
-    """List all reports"""
-    reports = manager.list_reports()
-    return jsonify({'reports': reports})
+def list_reports() -> Tuple[Response, int]:
+    """List all reports with pagination support"""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+
+    page = max(1, page)
+    per_page = min(max(1, per_page), 100)
+
+    all_reports = manager.list_reports()
+    total = len(all_reports)
+
+    start = (page - 1) * per_page
+    end = start + per_page
+    paginated_reports = all_reports[start:end]
+
+    return jsonify({
+        'reports': paginated_reports,
+        'pagination': {
+            'page': page,
+            'per_page': per_page,
+            'total': total,
+            'total_pages': (total + per_page - 1) // per_page
+        }
+    }), 200
 
 
 @app.route('/api/reports/<report_id>')
-def get_report(report_id):
-    """Get specific report details"""
+def get_report(report_id: str) -> Tuple[Response, int]:
+    """Get specific report details with optional filtering"""
     report = manager.get_report(report_id)
-    if report:
-        return jsonify(report)
-    else:
+    if not report:
         return jsonify({'error': 'Report not found'}), 404
+
+    action_filter = request.args.get('action')
+    if action_filter and 'duplicate_sets' in report:
+        report['duplicate_sets'] = [
+            ds for ds in report['duplicate_sets']
+            if ds.get('action') == action_filter
+        ]
+
+    return jsonify(report), 200
 
 
 @app.route('/reports')
@@ -169,30 +270,34 @@ def report_detail_page(report_id):
 
 
 @app.route('/api/reports/<report_id>/execute', methods=['POST'])
-def execute_report(report_id):
+@limiter.limit("5 per hour")
+def execute_report(report_id: str) -> Tuple[Response, int]:
     """Execute deduplication from report"""
     try:
         stats = manager.execute_report(report_id)
-        return jsonify({'success': True, 'stats': stats})
+        return jsonify({'success': True, 'stats': stats}), 200
     except Exception as e:
-        logger.error(f"Failed to execute report: {e}")
+        logger.error("Failed to execute report: %s", e)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/reports/<report_id>/download/<file_type>')
-def download_report(report_id, file_type):
+def download_report(report_id: str, file_type: str) -> Tuple[Response, int]:
     """Download report file"""
+    if not re.match(r'^[a-zA-Z0-9_-]+$', report_id):
+        return jsonify({'error': 'Invalid report ID'}), 400
+
     if file_type == 'json':
-        file_path = f"/data/reports/{report_id}/report.json"
+        file_path = os.path.join(REPORTS_DIR, report_id, 'report.json')
     elif file_type == 'markdown':
-        file_path = f"/data/reports/{report_id}/report.md"
+        file_path = os.path.join(REPORTS_DIR, report_id, 'report.md')
     else:
-        return "Invalid file type", 400
+        return jsonify({'error': 'Invalid file type'}), 400
 
     if os.path.exists(file_path):
         return send_file(file_path, as_attachment=True)
     else:
-        return "File not found", 404
+        return jsonify({'error': 'File not found'}), 404
 
 
 @app.route('/logs')
@@ -202,21 +307,36 @@ def logs_page():
 
 
 @app.route('/api/logs')
-def get_logs():
+def get_logs() -> Tuple[Response, int]:
     """Get recent logs"""
-    log_file = '/data/logs/web_ui.log'
+    log_file = os.path.join(LOGS_DIR, 'web_ui.log')
     lines = request.args.get('lines', 100, type=int)
+    lines = min(lines, 10000)
 
     if not os.path.exists(log_file):
         return jsonify({'logs': []})
 
     try:
-        with open(log_file, 'r') as f:
-            all_lines = f.readlines()
-            recent_lines = all_lines[-lines:]
+        import subprocess
+        result = subprocess.run(
+            ['tail', '-n', str(lines), log_file],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            recent_lines = result.stdout.splitlines(keepends=True)
             return jsonify({'logs': recent_lines})
+        else:
+            with open(log_file, 'r') as f:
+                all_lines = f.readlines()
+                recent_lines = all_lines[-lines:]
+                return jsonify({'logs': recent_lines})
+    except subprocess.TimeoutExpired:
+        logger.error("Timeout reading logs")
+        return jsonify({'error': 'Timeout reading logs'}), 500
     except Exception as e:
-        logger.error(f"Failed to read logs: {e}")
+        logger.error("Failed to read logs: %s", e)
         return jsonify({'error': str(e)}), 500
 
 
@@ -228,32 +348,55 @@ def config_page():
 
 
 @app.route('/api/config', methods=['GET', 'POST'])
-def config_api():
+def config_api() -> Tuple[Response, int]:
     """Get or update configuration"""
     if request.method == 'GET':
-        return jsonify(manager.config.config)
+        return jsonify(manager.config.config), 200
 
     elif request.method == 'POST':
         try:
             new_config = request.json
+            if new_config is None:
+                return jsonify({'success': False, 'error': 'Invalid JSON or empty request body'}), 400
 
-            # Validate YAML structure
             if not isinstance(new_config, dict):
                 return jsonify({'success': False, 'error': 'Invalid configuration format'}), 400
 
-            # Required keys
             required_keys = ['scan_paths', 'exclude_patterns', 'path_preferences', 'rmlint_options', 'safety']
             for key in required_keys:
                 if key not in new_config:
                     return jsonify({'success': False, 'error': f'Missing required key: {key}'}), 400
 
-            # Save configuration
+            if not isinstance(new_config.get('scan_paths'), list):
+                return jsonify({'success': False, 'error': 'scan_paths must be a list'}), 400
+
+            if not isinstance(new_config.get('exclude_patterns'), list):
+                return jsonify({'success': False, 'error': 'exclude_patterns must be a list'}), 400
+
+            if not isinstance(new_config.get('path_preferences'), list):
+                return jsonify({'success': False, 'error': 'path_preferences must be a list'}), 400
+
+            for pref in new_config.get('path_preferences', []):
+                if not isinstance(pref, dict):
+                    return jsonify({'success': False, 'error': 'Each path preference must be a dict'}), 400
+                if 'pattern' not in pref or 'priority' not in pref:
+                    return jsonify({'success': False, 'error': 'Path preferences must have pattern and priority'}), 400
+                if not isinstance(pref.get('priority'), int):
+                    return jsonify({'success': False, 'error': 'Priority must be an integer'}), 400
+
+            if not isinstance(new_config.get('rmlint_options'), dict):
+                return jsonify({'success': False, 'error': 'rmlint_options must be a dict'}), 400
+
+            if not isinstance(new_config.get('safety'), dict):
+                return jsonify({'success': False, 'error': 'safety must be a dict'}), 400
+
             manager.config.save(new_config)
+            manager.reload_config()
 
             return jsonify({'success': True, 'message': 'Configuration updated'})
 
         except Exception as e:
-            logger.error(f"Failed to update config: {e}")
+            logger.error("Failed to update config: %s", e)
             return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -266,10 +409,10 @@ def schedule_page():
 
 
 @app.route('/api/schedule', methods=['GET', 'POST'])
-def schedule_api():
+def schedule_api() -> Tuple[Response, int]:
     """Get or update schedule configuration"""
     if request.method == 'GET':
-        return jsonify(scheduler.get_config())
+        return jsonify(scheduler.get_config()), 200
 
     elif request.method == 'POST':
         try:
@@ -284,33 +427,33 @@ def schedule_api():
                 return jsonify({'success': False, 'error': 'Failed to update schedule'}), 500
 
         except Exception as e:
-            logger.error(f"Failed to update schedule: {e}")
+            logger.error("Failed to update schedule: %s", e)
             return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/schedule/enable', methods=['POST'])
-def enable_schedule():
+def enable_schedule() -> Tuple[Response, int]:
     """Enable scheduled scans"""
     if scheduler.enable():
-        return jsonify({'success': True, 'message': 'Schedule enabled'})
+        return jsonify({'success': True, 'message': 'Schedule enabled'}), 200
     else:
         return jsonify({'success': False, 'error': 'Failed to enable schedule'}), 500
 
 
 @app.route('/api/schedule/disable', methods=['POST'])
-def disable_schedule():
+def disable_schedule() -> Tuple[Response, int]:
     """Disable scheduled scans"""
     if scheduler.disable():
-        return jsonify({'success': True, 'message': 'Schedule disabled'})
+        return jsonify({'success': True, 'message': 'Schedule disabled'}), 200
     else:
         return jsonify({'success': False, 'error': 'Failed to disable schedule'}), 500
 
 
 @app.route('/api/schedule/trigger', methods=['POST'])
-def trigger_schedule():
+def trigger_schedule() -> Tuple[Response, int]:
     """Manually trigger a scan"""
     scheduler.trigger_now()
-    return jsonify({'success': True, 'message': 'Scan triggered'})
+    return jsonify({'success': True, 'message': 'Scan triggered'}), 200
 
 
 # Error handlers
@@ -323,31 +466,49 @@ def not_found(e):
 @app.errorhandler(500)
 def server_error(e):
     """Handle 500 errors"""
-    logger.error(f"Server error: {e}")
+    logger.error("Server error: %s", e)
     return render_template('500.html'), 500
 
 
 # Health check endpoint
 @app.route('/health')
-def health():
-    """Health check endpoint"""
-    return jsonify({
+def health() -> Tuple[Response, int]:
+    """Health check endpoint with dependency verification"""
+    health_status: Dict[str, Any] = {
         'status': 'healthy',
-        'timestamp': datetime.now().isoformat()
-    })
+        'timestamp': datetime.now().isoformat(),
+        'checks': {}
+    }
+
+    try:
+        test_file = os.path.join(DATA_DIR, '.health_check')
+        with open(test_file, 'w') as f:
+            f.write('test')
+        os.remove(test_file)
+        health_status['checks']['data_directory'] = 'ok'
+    except Exception as e:
+        health_status['checks']['data_directory'] = f'error: {str(e)}'
+        health_status['status'] = 'unhealthy'
+
+    try:
+        if scheduler and scheduler.scheduler.running:
+            health_status['checks']['scheduler'] = 'ok'
+        else:
+            health_status['checks']['scheduler'] = 'not running'
+            health_status['status'] = 'degraded'
+    except Exception as e:
+        health_status['checks']['scheduler'] = f'error: {str(e)}'
+        health_status['status'] = 'degraded'
+
+    status_code = 200 if health_status['status'] == 'healthy' else 503
+    return jsonify(health_status), status_code
 
 
-def main():
+def main() -> None:
     """Main entry point"""
-    # Ensure data directories exist
-    os.makedirs('/data/config', exist_ok=True)
-    os.makedirs('/data/reports', exist_ok=True)
-    os.makedirs('/data/logs', exist_ok=True)
-
     logger.info("Starting Unraid Deduplication Manager Web UI")
     logger.info("Access the UI at http://localhost:5000")
 
-    # Run Flask app
     app.run(
         host='0.0.0.0',
         port=5000,

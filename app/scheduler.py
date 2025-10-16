@@ -14,6 +14,10 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 
+# Configure paths from environment variables
+DATA_DIR = os.environ.get('DATA_DIR', '/data')
+CONFIG_DIR = os.path.join(DATA_DIR, 'config')
+
 logger = logging.getLogger(__name__)
 
 
@@ -29,7 +33,7 @@ class ScanScheduler:
         """
         self.scheduler = BackgroundScheduler()
         self.scan_callback = scan_callback
-        self.config_path = "/data/config/schedule.json"
+        self.config_path = os.path.join(CONFIG_DIR, 'schedule.json')
         self.job_id = "dedupe_scan"
 
         # Load configuration
@@ -82,9 +86,28 @@ class ScanScheduler:
             # Parse cron expression
             parts = cron_expr.split()
             if len(parts) != 5:
-                raise ValueError("Invalid cron expression")
+                raise ValueError("Invalid cron expression: must have 5 fields (minute hour day month day_of_week)")
 
             minute, hour, day, month, day_of_week = parts
+
+            def validate_field(value: str, name: str, min_val: int, max_val: int) -> None:
+                """Basic validation for cron field values"""
+                if value == '*' or value.startswith('*/'):
+                    return
+                if value.isdigit():
+                    num = int(value)
+                    if num < min_val or num > max_val:
+                        raise ValueError(f"{name} must be between {min_val} and {max_val}, got {num}")
+
+            try:
+                validate_field(minute, "minute", 0, 59)
+                validate_field(hour, "hour", 0, 23)
+                validate_field(day, "day", 1, 31)
+                validate_field(month, "month", 1, 12)
+                validate_field(day_of_week, "day_of_week", 0, 6)
+            except ValueError as e:
+                logger.error("Cron validation error: %s", e)
+                raise
 
             # Create trigger
             trigger = CronTrigger(
@@ -104,15 +127,17 @@ class ScanScheduler:
                 replace_existing=True
             )
 
-            logger.info(f"Scheduled scan: {cron_expr}")
+            logger.info("Scheduled scan: %s", cron_expr)
 
             # Log next run time
             job = self.scheduler.get_job(self.job_id)
             if job:
-                logger.info(f"Next scheduled run: {job.next_run_time}")
+                logger.info("Next scheduled run: %s", job.next_run_time)
 
+        except ValueError as e:
+            logger.error("Invalid cron expression '%s': %s", cron_expr, e)
         except Exception as e:
-            logger.error(f"Failed to apply schedule: {e}")
+            logger.error("Failed to apply schedule: %s", e)
 
     def get_config(self) -> Dict:
         """Get current schedule configuration"""
@@ -190,7 +215,6 @@ class ScanScheduler:
             parts = cron.split()
             minute, hour, day, month, day_of_week = parts
 
-            # Simple descriptions for common patterns
             if cron == "0 2 * * 0":
                 return "Weekly on Sunday at 2:00 AM"
             elif cron == "0 2 * * *":
@@ -201,7 +225,7 @@ class ScanScheduler:
                 return "Every 6 hours"
             else:
                 return f"Custom schedule: {cron}"
-        except:
+        except Exception:
             return cron
 
     def get_next_run_time(self) -> Optional[datetime]:
@@ -223,7 +247,6 @@ def get_cron_presets() -> Dict[str, str]:
         'Daily at 2 AM': '0 2 * * *',
         'Weekly (Sunday 2 AM)': '0 2 * * 0',
         'Weekly (Monday 2 AM)': '0 2 * * 1',
-        'Bi-weekly (Sunday 2 AM)': '0 2 */14 * 0',
         'Monthly (1st at 2 AM)': '0 2 1 * *',
         'Every 6 hours': '0 */6 * * *',
         'Every 12 hours': '0 */12 * * *'

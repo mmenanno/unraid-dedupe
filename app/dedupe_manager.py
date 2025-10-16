@@ -10,13 +10,21 @@ import re
 import shutil
 import subprocess
 import sys
+from collections import defaultdict
 from dataclasses import dataclass, asdict
 from datetime import datetime
-from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 import logging
 
 import yaml
+
+
+# Configure paths from environment variables
+DATA_DIR = os.environ.get('DATA_DIR', '/data')
+APP_DIR = os.environ.get('APP_DIR', '/app')
+CONFIG_DIR = os.path.join(DATA_DIR, 'config')
+REPORTS_DIR = os.path.join(DATA_DIR, 'reports')
+LOGS_DIR = os.path.join(DATA_DIR, 'logs')
 
 
 # Configure logging
@@ -25,6 +33,13 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+# Action type constants
+ACTION_SAME_DISK = "SAME_DISK"
+ACTION_CROSS_DISK = "CROSS_DISK"
+ACTION_MANUAL_REVIEW = "MANUAL_REVIEW"
+ACTION_PENDING = "PENDING"
 
 
 @dataclass
@@ -52,33 +67,32 @@ class DuplicateSet:
     size: int
     files: List[DuplicateFile]
     keeper: Optional[DuplicateFile] = None
-    action: str = "PENDING"  # SAME_DISK, CROSS_DISK, MANUAL_REVIEW
+    action: str = ACTION_PENDING
 
     def analyze(self, path_preferences: List[Dict]) -> None:
         """Determine keeper file and action based on preferences"""
-        # Check if all files are on same disk
         disks = set(f.disk for f in self.files if f.disk)
+        none_disk_count = sum(1 for f in self.files if f.disk is None)
 
-        if len(disks) == 1:
-            self.action = "SAME_DISK"
-            # For same-disk, just pick first file as keeper
-            self.keeper = self.files[0]
+        if none_disk_count == len(self.files):
+            self.action = ACTION_SAME_DISK
+            self.keeper = self.files[0] if self.files else None
             return
 
-        # Cross-disk duplicates - apply path preferences
-        self._apply_preferences(path_preferences)
+        if len(disks) == 1:
+            self.action = ACTION_SAME_DISK
+            self.keeper = self.files[0] if self.files else None
+            return
 
-        # Find keeper based on priority
+        self._apply_preferences(path_preferences)
         sorted_files = sorted(self.files, key=lambda f: (f.priority, f.path))
 
-        # Check if there's a clear winner
-        if sorted_files[0].priority < sorted_files[1].priority:
+        if len(sorted_files) >= 2 and sorted_files[0].priority < sorted_files[1].priority:
             self.keeper = sorted_files[0]
-            self.action = "CROSS_DISK"
+            self.action = ACTION_CROSS_DISK
         else:
-            # Tie or no clear preference
-            self.action = "MANUAL_REVIEW"
-            self.keeper = sorted_files[0]  # Still set a default keeper
+            self.action = ACTION_MANUAL_REVIEW
+            self.keeper = sorted_files[0] if sorted_files else None
 
     def _apply_preferences(self, path_preferences: List[Dict]) -> None:
         """Apply path preference rules to files"""
@@ -87,35 +101,38 @@ class DuplicateSet:
                 pattern = pref.get('pattern', '')
                 priority = pref.get('priority', 999)
 
-                # Convert glob pattern to regex
-                regex_pattern = pattern.replace('*', '.*')
-                if re.match(regex_pattern, file.path):
-                    file.priority = min(file.priority, priority)
-                    break
+                regex_pattern = re.escape(pattern).replace(r'\*', '.*')
+                try:
+                    if re.match(regex_pattern, file.path):
+                        file.priority = min(file.priority, priority)
+                        break
+                except re.error as e:
+                    logger.warning("Invalid pattern '%s': %s", pattern, e)
+                    continue
 
 
 class DedupeConfig:
     """Manages deduplication configuration"""
 
-    def __init__(self, config_path: str = "/data/config/dedupe_config.yaml"):
-        self.config_path = config_path
+    def __init__(self, config_path: str = None):
+        self.config_path = config_path or os.path.join(CONFIG_DIR, 'dedupe_config.yaml')
         self.config = self._load_config()
 
     def _load_config(self) -> Dict:
         """Load configuration from YAML file"""
         # If config doesn't exist, copy default
         if not os.path.exists(self.config_path):
-            default_path = "/app/config/dedupe_config.yaml"
+            default_path = os.path.join(APP_DIR, 'config', 'dedupe_config.yaml')
             if os.path.exists(default_path):
                 os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
                 shutil.copy(default_path, self.config_path)
-                logger.info(f"Copied default config to {self.config_path}")
+                logger.info("Copied default config to %s", self.config_path)
 
         try:
             with open(self.config_path, 'r') as f:
                 return yaml.safe_load(f)
         except Exception as e:
-            logger.error(f"Failed to load config: {e}")
+            logger.error("Failed to load config: %s", e)
             return self._default_config()
 
     def _default_config(self) -> Dict:
@@ -136,12 +153,22 @@ class DedupeConfig:
         }
 
     def save(self, config: Dict) -> None:
-        """Save configuration to file"""
+        """Save configuration to file atomically"""
         os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
-        with open(self.config_path, 'w') as f:
-            yaml.dump(config, f, default_flow_style=False)
-        self.config = config
-        logger.info(f"Configuration saved to {self.config_path}")
+        temp_path = self.config_path + '.tmp'
+        try:
+            with open(temp_path, 'w') as f:
+                yaml.dump(config, f, default_flow_style=False)
+            os.replace(temp_path, self.config_path)
+            self.config = config
+            logger.info("Configuration saved to %s", self.config_path)
+        except Exception as e:
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except Exception:
+                    pass
+            raise e
 
 
 class RmlintScanner:
@@ -150,7 +177,7 @@ class RmlintScanner:
     def __init__(self, config: DedupeConfig):
         self.config = config
 
-    def scan(self, output_path: str = "/data/reports/scan.json", progress_callback=None) -> bool:
+    def scan(self, output_path: str = None, progress_callback=None) -> bool:
         """Run rmlint scan and save results
 
         Args:
@@ -160,22 +187,29 @@ class RmlintScanner:
         Returns:
             True if successful, False otherwise
         """
+        if output_path is None:
+            output_path = os.path.join(REPORTS_DIR, 'scan.json')
+
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+        # Verify available disk space
+        try:
+            disk_usage = shutil.disk_usage(os.path.dirname(output_path))
+            if disk_usage.free < 100 * 1024 * 1024:
+                logger.error("Insufficient disk space for scan output (need 100MB, have %d bytes)", disk_usage.free)
+                return False
+        except Exception as e:
+            logger.warning("Could not check disk space: %s", e)
 
         scan_paths = self.config.config.get('scan_paths', ['/mnt/user/data'])
         algorithm = self.config.config.get('rmlint_options', {}).get('algorithm', 'xxhash')
 
-        # Build rmlint command
         cmd = ['rmlint']
-
-        # Add scan paths
         cmd.extend(scan_paths)
 
-        # Add exclude patterns
         for pattern in self.config.config.get('exclude_patterns', []):
             cmd.extend(['--exclude', pattern])
 
-        # Add options
         cmd.extend([
             f'--algorithm={algorithm}',
             f'--output=json:{output_path}',
@@ -183,20 +217,17 @@ class RmlintScanner:
             '--no-hidden'
         ])
 
-        logger.info(f"Running rmlint: {' '.join(cmd)}")
+        logger.info("Running rmlint: %s", ' '.join(cmd))
 
         try:
-            # Use Popen for real-time output streaming
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                bufsize=1,
-                universal_newlines=True
+                bufsize=1
             )
 
-            # Track progress through stderr (where rmlint outputs progress)
             stderr_output = []
             while True:
                 line = process.stderr.readline()
@@ -207,14 +238,28 @@ class RmlintScanner:
                     stderr_output.append(line)
                     line_stripped = line.strip()
 
-                    # Parse rmlint progress output
                     if progress_callback:
-                        progress_info = self._parse_rmlint_progress(line_stripped, stderr_output)
+                        progress_info = self._parse_rmlint_progress(line_stripped)
                         if progress_info:
                             progress_callback(progress_info['percent'], progress_info['message'])
 
-            # Get return code
-            return_code = process.wait()
+            try:
+                return_code = process.wait(timeout=3600)
+            except subprocess.TimeoutExpired:
+                logger.error("rmlint scan timed out after 1 hour")
+                try:
+                    process.kill()
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    try:
+                        import signal
+                        os.kill(process.pid, signal.SIGKILL)
+                        process.wait(timeout=5)
+                    except Exception as e:
+                        logger.error("Failed to kill process: %s", e)
+                except Exception as e:
+                    logger.error("Error during process cleanup: %s", e)
+                return False
 
             if return_code == 0:
                 logger.info("rmlint scan completed successfully")
@@ -223,43 +268,34 @@ class RmlintScanner:
                 return True
             else:
                 error_output = ''.join(stderr_output)
-                logger.error(f"rmlint scan failed with code {return_code}")
+                logger.error("rmlint scan failed with code %d", return_code)
                 logger.error(error_output)
                 return False
 
         except Exception as e:
-            logger.error(f"rmlint scan failed: {e}")
+            logger.error("rmlint scan failed: %s", e)
             return False
 
-    def _parse_rmlint_progress(self, line: str, all_lines: list) -> Optional[Dict]:
+    def _parse_rmlint_progress(self, line: str) -> Optional[Dict]:
         """Parse rmlint output to extract progress information
 
         Returns dict with 'percent' and 'message' keys, or None if no progress info
         """
-        # rmlint outputs various progress indicators
-        # Look for patterns like:
-        # - "Traversing: 1234 files"
-        # - "Hashing: 567 / 1234 files"
-        # - "==> In total X files"
-
         if "Traversing" in line or "traversing" in line:
             return {'percent': 10, 'message': 'Scanning directories...'}
 
-        # Match patterns like "Preprocessing: 123 / 456 files"
         if "/" in line and "files" in line.lower():
             try:
-                # Extract numbers like "123 / 456"
-                parts = line.split('/')
-                if len(parts) >= 2:
-                    current = int(''.join(filter(str.isdigit, parts[0])))
-                    total = int(''.join(filter(str.isdigit, parts[1].split()[0])))
+                match = re.search(r'(\d+)\s*/\s*(\d+)', line)
+                if match:
+                    current = int(match.group(1))
+                    total = int(match.group(2))
                     if total > 0:
                         percent = min(90, int((current / total) * 80) + 10)  # 10-90%
                         return {'percent': percent, 'message': f'Processing files ({current}/{total})...'}
-            except (ValueError, ZeroDivisionError, IndexError):
+            except (ValueError, ZeroDivisionError):
                 pass
 
-        # Processing/hashing indicators
         if "preprocessing" in line.lower():
             return {'percent': 20, 'message': 'Preprocessing files...'}
         if "hashing" in line.lower() or "hash" in line.lower():
@@ -280,22 +316,40 @@ class DuplicateParser:
 
     def parse(self, json_path: str) -> List[DuplicateSet]:
         """Parse rmlint JSON output into DuplicateSet objects"""
-        logger.info(f"Parsing rmlint output: {json_path}")
+        logger.info("Parsing rmlint output: %s", json_path)
 
-        with open(json_path, 'r') as f:
-            data = json.load(f)
+        try:
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+        except json.JSONDecodeError as e:
+            logger.error("Failed to parse JSON output: %s", e)
+            return []
+        except FileNotFoundError:
+            logger.error("JSON output file not found: %s", json_path)
+            return []
+        except Exception as e:
+            logger.error("Unexpected error reading JSON: %s", e)
+            return []
 
-        # Group duplicates by checksum
-        duplicate_groups: Dict[str, List[Dict]] = {}
+        if not isinstance(data, list):
+            logger.error("Invalid JSON format: expected list, got %s", type(data))
+            return []
+
+        if not data:
+            logger.info("No duplicates found - rmlint output is empty")
+            return []
+
+        # Group duplicates by checksum using defaultdict for efficiency
+        duplicate_groups: Dict[str, List[Dict]] = defaultdict(list)
 
         for entry in data:
+            if not isinstance(entry, dict):
+                logger.warning(f"Skipping invalid entry: {type(entry)}")
+                continue
             if entry.get('type') == 'duplicate_file':
                 checksum = entry.get('checksum', 'unknown')
-                if checksum not in duplicate_groups:
-                    duplicate_groups[checksum] = []
                 duplicate_groups[checksum].append(entry)
 
-        # Create DuplicateSet objects
         duplicate_sets = []
         path_preferences = self.config.config.get('path_preferences', [])
 
@@ -320,7 +374,7 @@ class DuplicateParser:
             dup_set.analyze(path_preferences)
             duplicate_sets.append(dup_set)
 
-        logger.info(f"Found {len(duplicate_sets)} duplicate sets")
+        logger.info("Found %d duplicate sets", len(duplicate_sets))
         return duplicate_sets
 
 
@@ -340,7 +394,7 @@ class ReportGenerator:
         with open(output_path, 'w') as f:
             json.dump(report, f, indent=2)
 
-        logger.info(f"JSON report saved to {output_path}")
+        logger.info("JSON report saved to %s", output_path)
 
     def generate_markdown(self, duplicate_sets: List[DuplicateSet], output_path: str) -> None:
         """Generate Markdown report for human reading"""
@@ -359,16 +413,11 @@ class ReportGenerator:
             f.write(f"- **Manual Review Needed:** {summary['manual_review_sets']}\n")
             f.write(f"- **Total Space Reclaimable:** {self._format_size(summary['total_reclaimable'])}\n\n")
 
-            # Same-disk duplicates
-            self._write_category(f, duplicate_sets, "SAME_DISK", "Same-Disk Duplicates")
+            self._write_category(f, duplicate_sets, ACTION_SAME_DISK, "Same-Disk Duplicates")
+            self._write_category(f, duplicate_sets, ACTION_CROSS_DISK, "Cross-Disk Duplicates")
+            self._write_category(f, duplicate_sets, ACTION_MANUAL_REVIEW, "Manual Review Required")
 
-            # Cross-disk duplicates
-            self._write_category(f, duplicate_sets, "CROSS_DISK", "Cross-Disk Duplicates")
-
-            # Manual review
-            self._write_category(f, duplicate_sets, "MANUAL_REVIEW", "Manual Review Required")
-
-        logger.info(f"Markdown report saved to {output_path}")
+        logger.info("Markdown report saved to %s", output_path)
 
     def _write_category(self, f, duplicate_sets: List[DuplicateSet], action: str, title: str) -> None:
         """Write a category section to markdown file"""
@@ -404,16 +453,15 @@ class ReportGenerator:
         }
 
         for ds in duplicate_sets:
-            # Calculate space per set (all duplicates except keeper)
             space = ds.size * (len(ds.files) - 1)
 
-            if ds.action == "SAME_DISK":
+            if ds.action == ACTION_SAME_DISK:
                 summary['same_disk_sets'] += 1
                 summary['same_disk_space'] += space
-            elif ds.action == "CROSS_DISK":
+            elif ds.action == ACTION_CROSS_DISK:
                 summary['cross_disk_sets'] += 1
                 summary['cross_disk_space'] += space
-            elif ds.action == "MANUAL_REVIEW":
+            elif ds.action == ACTION_MANUAL_REVIEW:
                 summary['manual_review_sets'] += 1
 
             summary['total_reclaimable'] += space
@@ -444,12 +492,16 @@ class DedupeExecutor:
 
     def __init__(self, config: DedupeConfig):
         self.config = config
-        self.log_path = "/data/logs/execution.log"
+        self.log_path = os.path.join(LOGS_DIR, 'execution.log')
         os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
+
+    def _get_safety_config(self, key: str, default=None):
+        """Helper method to get safety configuration value"""
+        return self.config.config.get('safety', {}).get(key, default)
 
     def execute(self, report_path: str) -> Dict:
         """Execute deduplication from report"""
-        logger.info(f"Executing deduplication from {report_path}")
+        logger.info("Executing deduplication from %s", report_path)
 
         with open(report_path, 'r') as f:
             report = json.load(f)
@@ -465,13 +517,13 @@ class DedupeExecutor:
         for ds_dict in report['duplicate_sets']:
             action = ds_dict.get('action')
 
-            if action == 'MANUAL_REVIEW':
+            if action == ACTION_MANUAL_REVIEW:
                 stats['skipped'] += 1
                 continue
 
-            if action == 'SAME_DISK':
+            if action == ACTION_SAME_DISK:
                 result = self._execute_same_disk(ds_dict)
-            elif action == 'CROSS_DISK':
+            elif action == ACTION_CROSS_DISK:
                 result = self._execute_cross_disk(ds_dict)
             else:
                 stats['skipped'] += 1
@@ -484,7 +536,7 @@ class DedupeExecutor:
             else:
                 stats['failed'] += 1
 
-        logger.info(f"Execution complete: {stats}")
+        logger.info("Execution complete: %s", stats)
         return stats
 
     def _execute_same_disk(self, ds_dict: Dict) -> bool:
@@ -495,6 +547,23 @@ class DedupeExecutor:
 
         keeper_path = keeper['path']
 
+        try:
+            keeper_stat = os.stat(keeper_path)
+            for file in ds_dict['files']:
+                if file['path'] == keeper_path:
+                    continue
+                file_stat = os.stat(file['path'])
+                if keeper_stat.st_dev != file_stat.st_dev:
+                    logger.error("Files not on same device: %s (dev %d) vs %s (dev %d)",
+                                keeper_path, keeper_stat.st_dev, file['path'], file_stat.st_dev)
+                    return False
+        except FileNotFoundError as e:
+            logger.error("File not found during device check: %s", e)
+            return False
+        except Exception as e:
+            logger.error("Failed to check device: %s", e)
+            return False
+
         for file in ds_dict['files']:
             if file['path'] == keeper_path:
                 continue
@@ -503,7 +572,7 @@ class DedupeExecutor:
                 if not self._create_hardlink(keeper_path, file['path']):
                     return False
             except Exception as e:
-                logger.error(f"Failed to dedupe {file['path']}: {e}")
+                logger.error("Failed to dedupe %s: %s", file['path'], e)
                 return False
 
         return True
@@ -522,10 +591,14 @@ class DedupeExecutor:
             return False
 
         keeper_path = keeper['path']
-        cross_disk_action = self.config.config.get('safety', {}).get('cross_disk_action', 'manual_review')
+        cross_disk_action = self._get_safety_config('cross_disk_action', 'manual_review')
+
+        if not os.path.exists(keeper_path):
+            logger.error("Keeper file does not exist: %s", keeper_path)
+            return False
 
         if cross_disk_action == 'skip':
-            logger.info(f"Skipping cross-disk duplicate set (keeper: {keeper_path})")
+            logger.info("Skipping cross-disk duplicate set (keeper: %s)", keeper_path)
             return True
 
         for file in ds_dict['files']:
@@ -534,83 +607,136 @@ class DedupeExecutor:
                 continue
 
             try:
+                if not os.path.exists(file_path):
+                    logger.warning("File does not exist, skipping: %s", file_path)
+                    continue
+
                 if cross_disk_action == 'manual_review':
-                    logger.info(f"Cross-disk duplicate marked for manual review: {file_path}")
+                    logger.info("Cross-disk duplicate marked for manual review: %s", file_path)
                     continue
 
                 elif cross_disk_action == 'delete_duplicate':
-                    # Verify files are actually on different disks
                     keeper_stat = os.stat(keeper_path)
                     dup_stat = os.stat(file_path)
 
                     if keeper_stat.st_dev == dup_stat.st_dev:
-                        # Actually on same disk - can use hardlink instead
-                        logger.info(f"Files on same device, using hardlink: {file_path}")
+                        logger.info("Files on same device, using hardlink: %s", file_path)
                         if not self._create_hardlink(keeper_path, file_path):
                             return False
                     else:
-                        # Different disks - delete duplicate after verification
-                        logger.warning(f"Deleting cross-disk duplicate: {file_path}")
+                        logger.warning("Deleting cross-disk duplicate: %s", file_path)
 
-                        # Verify file sizes match as safety check
-                        if keeper_stat.st_size != dup_stat.st_size:
-                            logger.error(f"Size mismatch! Keeper: {keeper_stat.st_size}, Duplicate: {dup_stat.st_size}")
+                        try:
+                            with open(keeper_path, 'rb') as keeper_f, open(file_path, 'rb') as dup_f:
+                                keeper_fstat = os.fstat(keeper_f.fileno())
+                                dup_fstat = os.fstat(dup_f.fileno())
+
+                                if keeper_fstat.st_size != dup_fstat.st_size:
+                                    logger.error("Size mismatch! Keeper: %d, Duplicate: %d",
+                                               keeper_fstat.st_size, dup_fstat.st_size)
+                                    return False
+
+                                if keeper_fstat.st_mtime != keeper_stat.st_mtime:
+                                    logger.error("Keeper file was modified during operation: %s", keeper_path)
+                                    return False
+                                if dup_fstat.st_mtime != dup_stat.st_mtime:
+                                    logger.error("Duplicate file was modified during operation: %s", file_path)
+                                    return False
+
+                        except Exception as e:
+                            logger.error("Failed to verify files before deletion: %s", e)
                             return False
 
-                        # Create backup if configured
-                        if self.config.config.get('safety', {}).get('keep_backups', False):
-                            shutil.copy2(file_path, f"{file_path}.backup")
-                            logger.info(f"Created backup: {file_path}.backup")
+                        if self._get_safety_config('keep_backups', False):
+                            try:
+                                disk_usage = shutil.disk_usage(os.path.dirname(file_path))
+                                if disk_usage.free < dup_stat.st_size * 1.1:
+                                    logger.error("Insufficient disk space for backup (need %d bytes, have %d bytes)",
+                                               dup_stat.st_size, disk_usage.free)
+                                    return False
+                            except Exception as e:
+                                logger.warning("Could not check disk space for backup: %s", e)
 
-                        # Delete the duplicate
+                            shutil.copy2(file_path, f"{file_path}.backup")
+                            logger.info("Created backup: %s.backup", file_path)
+
                         os.remove(file_path)
-                        logger.info(f"Deleted cross-disk duplicate: {file_path}")
+                        logger.info("Deleted cross-disk duplicate: %s", file_path)
                 else:
-                    logger.error(f"Unknown cross_disk_action: {cross_disk_action}")
+                    logger.error("Unknown cross_disk_action: %s", cross_disk_action)
                     return False
 
             except Exception as e:
-                logger.error(f"Failed to process cross-disk duplicate {file_path}: {e}")
+                logger.error("Failed to process cross-disk duplicate %s: %s", file_path, e)
                 return False
 
         return True
 
     def _create_hardlink(self, source: str, duplicate: str) -> bool:
-        """Create hardlink and verify"""
-        verify = self.config.config.get('safety', {}).get('verify_after_hardlink', True)
+        """Create hardlink and verify
 
-        # Get source inode before
+        Uses atomic operation: create temp hardlink first, then replace original
+        to prevent data loss if hardlink creation fails.
+        """
+        if not os.path.exists(source):
+            logger.error("Source file does not exist: %s", source)
+            return False
+        if not os.path.exists(duplicate):
+            logger.error("Duplicate file does not exist: %s", duplicate)
+            return False
+
+        verify = self._get_safety_config('verify_after_hardlink', True)
+
         source_stat = os.stat(source)
         source_inode = source_stat.st_ino
 
-        # Create backup if configured
-        if self.config.config.get('safety', {}).get('keep_backups', False):
+        if self._get_safety_config('keep_backups', False):
             shutil.copy2(duplicate, f"{duplicate}.backup")
 
-        # Remove duplicate and create hardlink
-        os.remove(duplicate)
-        os.link(source, duplicate)
+        temp_link = f"{duplicate}.hardlink_temp"
+        try:
+            os.link(source, temp_link)
 
-        # Verify if enabled
-        if verify:
-            dup_stat = os.stat(duplicate)
-            if dup_stat.st_ino != source_inode:
-                logger.error(f"Hardlink verification failed: {duplicate}")
-                return False
+            if verify:
+                temp_stat = os.stat(temp_link)
+                if temp_stat.st_ino != source_inode:
+                    logger.error("Hardlink verification failed for temp file: %s", temp_link)
+                    os.remove(temp_link)
+                    return False
 
-        logger.info(f"Successfully hardlinked: {duplicate} -> {source}")
+            os.replace(temp_link, duplicate)
+
+        except Exception as e:
+            logger.error("Failed to create hardlink: %s", e)
+            if os.path.exists(temp_link):
+                try:
+                    os.remove(temp_link)
+                except Exception as cleanup_error:
+                    logger.warning("Failed to cleanup temp file %s: %s", temp_link, cleanup_error)
+            return False
+
+        logger.info("Successfully hardlinked: %s -> %s", duplicate, source)
         return True
 
 
 class DedupeManager:
     """Main manager class"""
 
-    def __init__(self, config_path: str = "/data/config/dedupe_config.yaml"):
+    def __init__(self, config_path: str = None):
         self.config = DedupeConfig(config_path)
         self.scanner = RmlintScanner(self.config)
         self.parser = DuplicateParser(self.config)
         self.report_gen = ReportGenerator()
         self.executor = DedupeExecutor(self.config)
+
+    def reload_config(self) -> None:
+        """Reload configuration from disk
+
+        This ensures all components use the updated configuration
+        after it's been modified via the web UI or CLI.
+        """
+        self.config.config = self.config._load_config()
+        logger.info("Configuration reloaded")
 
     def scan(self, report_id: Optional[str] = None, progress_callback=None) -> str:
         """Run complete scan and generate reports
@@ -625,23 +751,20 @@ class DedupeManager:
         if not report_id:
             report_id = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        report_dir = f"/data/reports/{report_id}"
+        report_dir = os.path.join(REPORTS_DIR, report_id)
         os.makedirs(report_dir, exist_ok=True)
 
-        scan_json = f"{report_dir}/scan.json"
-        report_json = f"{report_dir}/report.json"
-        report_md = f"{report_dir}/report.md"
+        scan_json = os.path.join(report_dir, 'scan.json')
+        report_json = os.path.join(report_dir, 'report.json')
+        report_md = os.path.join(report_dir, 'report.md')
 
-        # Run rmlint scan (0-90% of progress)
         if not self.scanner.scan(scan_json, progress_callback=progress_callback):
             raise Exception("Scan failed")
 
-        # Parse results (90-95%)
         if progress_callback:
             progress_callback(92, "Parsing results...")
         duplicate_sets = self.parser.parse(scan_json)
 
-        # Generate reports (95-100%)
         if progress_callback:
             progress_callback(95, "Generating reports...")
         self.report_gen.generate_json(duplicate_sets, report_json)
@@ -650,12 +773,12 @@ class DedupeManager:
         if progress_callback:
             progress_callback(100, "Complete")
 
-        logger.info(f"Scan complete. Report ID: {report_id}")
+        logger.info("Scan complete. Report ID: %s", report_id)
         return report_id
 
     def execute_report(self, report_id: str) -> Dict:
         """Execute deduplication from report"""
-        report_json = f"/data/reports/{report_id}/report.json"
+        report_json = os.path.join(REPORTS_DIR, report_id, 'report.json')
 
         if not os.path.exists(report_json):
             raise FileNotFoundError(f"Report not found: {report_json}")
@@ -664,27 +787,45 @@ class DedupeManager:
 
     def list_reports(self) -> List[Dict]:
         """List all available reports"""
-        reports_dir = "/data/reports"
-        if not os.path.exists(reports_dir):
+        if not os.path.exists(REPORTS_DIR):
             return []
 
         reports = []
-        for report_id in os.listdir(reports_dir):
-            report_path = os.path.join(reports_dir, report_id, "report.json")
-            if os.path.exists(report_path):
-                with open(report_path, 'r') as f:
-                    data = json.load(f)
-                    reports.append({
-                        'id': report_id,
-                        'generated_at': data.get('generated_at'),
-                        'summary': data.get('summary')
-                    })
+        try:
+            report_ids = os.listdir(REPORTS_DIR)
+        except PermissionError as e:
+            logger.error("Permission denied accessing reports directory: %s", e)
+            return []
+        except Exception as e:
+            logger.error("Error listing reports directory: %s", e)
+            return []
 
-        return sorted(reports, key=lambda r: r['generated_at'], reverse=True)
+        for report_id in report_ids:
+            report_path = os.path.join(REPORTS_DIR, report_id, 'report.json')
+            if os.path.exists(report_path):
+                try:
+                    with open(report_path, 'r') as f:
+                        data = json.load(f)
+                        reports.append({
+                            'id': report_id,
+                            'generated_at': data.get('generated_at'),
+                            'summary': data.get('summary')
+                        })
+                except json.JSONDecodeError as e:
+                    logger.warning("Skipping report with invalid JSON %s: %s", report_id, e)
+                    continue
+                except (FileNotFoundError, PermissionError) as e:
+                    logger.warning("Skipping inaccessible report %s: %s", report_id, e)
+                    continue
+                except Exception as e:
+                    logger.warning("Skipping report %s due to unexpected error: %s", report_id, e)
+                    continue
+
+        return sorted(reports, key=lambda r: r.get('generated_at') or '', reverse=True)
 
     def get_report(self, report_id: str) -> Optional[Dict]:
         """Get specific report details"""
-        report_json = f"/data/reports/{report_id}/report.json"
+        report_json = os.path.join(REPORTS_DIR, report_id, 'report.json')
 
         if not os.path.exists(report_json):
             return None
