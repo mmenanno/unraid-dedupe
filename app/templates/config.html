@@ -443,7 +443,7 @@
                 }
             }
         });
-        
+
         updateCrossDiskWarning();
     });
 
@@ -744,10 +744,15 @@
 
         const form = event.target;
         const formData = new FormData(form);
-        const submitBtn = document.querySelector('#config-form button[type="submit"]');
+        
+        // Use event.submitter or fallback to finding the button
+        let submitBtn = event.submitter;
+        if (!submitBtn) {
+            submitBtn = form.querySelector('button[type="submit"]');
+        }
 
         if (!submitBtn) {
-            console.error('Submit button not found');
+            console.error('Submit button not found in form');
             showToast('Failed to save configuration', 'error');
             return;
         }
