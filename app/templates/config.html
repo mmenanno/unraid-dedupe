@@ -271,7 +271,7 @@
                 type="button"
                 onclick="toggleSection('rmlint-section')"
                 class="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-700/50 transition-colors rounded-t-xl"
-                aria-expanded="true"
+                aria-expanded="false"
                 aria-controls="rmlint-section">
                 <div class="flex items-center gap-3">
                     <svg class="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -297,7 +297,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                 </svg>
             </button>
-            <div id="rmlint-section" class="px-6 pb-6 pt-4 rounded-b-xl">
+            <div id="rmlint-section" class="hidden px-6 pb-6 pt-4 rounded-b-xl">
                 <label class="block text-sm text-dark-300 font-medium mb-2">Algorithm</label>
                 <select
                     id="algorithm"
@@ -317,7 +317,7 @@
                 type="button"
                 onclick="toggleSection('safety-section')"
                 class="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-700/50 transition-colors rounded-t-xl"
-                aria-expanded="true"
+                aria-expanded="false"
                 aria-controls="safety-section">
                 <div class="flex items-center gap-3">
                     <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -332,7 +332,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                 </svg>
             </button>
-            <div id="safety-section" class="px-6 pb-6 pt-4 space-y-4">
+            <div id="safety-section" class="hidden px-6 pb-6 pt-4 space-y-4">
                 <!-- Cross-disk action warning -->
                 <div id="cross-disk-warning" class="hidden p-4 bg-red-900/30 border-2 border-red-700 rounded-lg">
                     <div class="flex items-start gap-3">
@@ -429,21 +429,16 @@
 <script>
     // Initialize page on load
     document.addEventListener('DOMContentLoaded', () => {
-        // Ensure all sections start expanded (matching aria-expanded="true")
-        const sections = ['scan-paths-section', 'exclude-section', 'prefs-section', 'rmlint-section', 'safety-section'];
-        sections.forEach(sectionId => {
-            const section = document.getElementById(sectionId);
-            const button = document.querySelector(`[aria-controls="${sectionId}"]`);
-            if (section && button) {
-                section.classList.remove('hidden');
-                button.setAttribute('aria-expanded', 'true');
-                const chevron = button.querySelector('.section-chevron');
-                if (chevron) {
-                    chevron.style.transform = 'rotate(0)';
-                }
+        // Initialize chevrons based on current aria-expanded state (respect HTML defaults)
+        const buttons = document.querySelectorAll('[aria-controls]');
+        buttons.forEach(button => {
+            const chevron = button.querySelector('.section-chevron');
+            const isExpanded = button.getAttribute('aria-expanded') === 'true';
+            if (chevron) {
+                chevron.style.transform = isExpanded ? 'rotate(0)' : 'rotate(-90deg)';
             }
         });
-
+        
         updateCrossDiskWarning();
     });
 
@@ -609,34 +604,23 @@
     }
 
     function toggleSection(sectionId) {
-        console.log('toggleSection called:', sectionId);
-
         const section = document.getElementById(sectionId);
         const button = document.querySelector(`[aria-controls="${sectionId}"]`);
-
-        if (!section) {
-            console.error('Section not found:', sectionId);
+        
+        if (!section || !button) {
+            console.error('Section or button not found:', sectionId);
             return;
         }
-
-        if (!button) {
-            console.error('Button not found for section:', sectionId);
-            return;
-        }
-
+        
         const chevron = button.querySelector('.section-chevron');
         const isExpanded = button.getAttribute('aria-expanded') === 'true';
 
-        console.log('Current state:', { sectionId, isExpanded, hasChevron: !!chevron });
-
         // Toggle visibility
         if (isExpanded) {
-            console.log('Collapsing section:', sectionId);
             section.classList.add('hidden');
             button.setAttribute('aria-expanded', 'false');
             if (chevron) chevron.style.transform = 'rotate(-90deg)';
         } else {
-            console.log('Expanding section:', sectionId);
             section.classList.remove('hidden');
             button.setAttribute('aria-expanded', 'true');
             if (chevron) chevron.style.transform = 'rotate(0)';
