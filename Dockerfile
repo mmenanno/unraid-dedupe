@@ -26,10 +26,10 @@ RUN git clone https://github.com/sahib/rmlint.git /tmp/rmlint \
     && ldconfig
 
 # Stage 2: Build Tailwind CSS
-FROM alpine:latest AS tailwind-builder
+FROM debian:bullseye-slim AS tailwind-builder
 
 # Install curl to download Tailwind CLI
-RUN apk add --no-cache curl
+RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Download Tailwind standalone CLI (Linux x64)
 RUN curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64 \
