@@ -49,6 +49,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY app/ /app/
 COPY config/dedupe_config.yaml /app/config/dedupe_config.yaml
+COPY gunicorn.conf.py /app/gunicorn.conf.py
 
 # Create data directories with proper permissions
 RUN mkdir -p /data/config /data/reports /data/logs \
@@ -65,6 +66,6 @@ ENV FLASK_APP=web_ui.py
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:5000/health')" || exit 1
 
-# Run the application
-CMD ["python", "web_ui.py"]
+# Run the application with Gunicorn (production WSGI server)
+CMD ["gunicorn", "--config", "gunicorn.conf.py", "web_ui:app"]
 

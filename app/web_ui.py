@@ -94,6 +94,10 @@ def trigger_scan():
 # Initialize scheduler
 scheduler = ScanScheduler(scan_callback)
 
+# Log startup information
+logger.info("Unraid Deduplication Manager initialized")
+logger.info(f"Running in {'production' if not os.environ.get('FLASK_DEBUG', 'False').lower() == 'true' else 'development'} mode")
+
 
 # Routes
 @app.route('/')

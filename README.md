@@ -7,6 +7,7 @@ A self-contained Docker application for managing file deduplication on Unraid se
 - **Automated Scanning**: Built-in scheduler for periodic deduplication scans
 - **Smart Decision Engine**: Intelligently handles same-disk and cross-disk duplicates with configurable path preferences
 - **Web Interface**: Modern, mobile-responsive UI - no SSH required
+- **Production Ready**: Runs with Gunicorn WSGI server for stable production deployment
 - **Safe Operations**: Dry-run reports, hardlink verification, comprehensive logging
 - **Configuration Management**: Full config editing through the web UI
 - **Real-time Progress**: Live scan status updates and log streaming
@@ -154,7 +155,24 @@ rmlint_options:
 safety:
   verify_after_hardlink: true  # Verify inode after hardlink creation
   keep_backups: false          # Keep .backup files (not recommended)
+  cross_disk_action: "skip"    # How to handle cross-disk duplicates
 ```
+
+**Cross-Disk Deduplication Options:**
+
+Since hardlinks only work within the same filesystem/disk, cross-disk duplicates require special handling:
+
+- **`skip`** (default): Don't process cross-disk duplicates. Safest option, no risk of data loss, but no space savings across disks.
+- **`manual_review`**: Log cross-disk duplicates for manual review. Files are not modified automatically.
+- **`delete_duplicate`**: Delete non-preferred duplicates on other disks. **⚠️ WARNING**: This permanently deletes files and loses redundancy across disks. Use with caution!
+
+**Example scenarios:**
+
+If you have `/mnt/disk1/media/movie.mkv` (priority 1) and `/mnt/disk2/downloads/movie.mkv` (priority 2):
+
+- `skip`: Both files remain untouched
+- `manual_review`: Both files remain, but logged for your review
+- `delete_duplicate`: `/mnt/disk2/downloads/movie.mkv` is deleted, only disk1 copy remains
 
 ## Scheduling
 
@@ -308,7 +326,13 @@ Check logs:
 docker logs dedupe-manager
 ```
 
-### Scan fails
+### Scan fails with "Can't open directory or file" error
+
+This was fixed in recent versions. If you see this error:
+- Update to the latest version by rebuilding the container
+- The issue was with rmlint exclude pattern syntax (now uses `--exclude` instead of `--match-without-extension`)
+
+### Other scan failures
 
 - Verify scan paths are correct and accessible
 - Check permissions on `/mnt` mount
@@ -332,7 +356,8 @@ docker logs dedupe-manager
 - Start with a small test directory first
 - Consider running with read-only `/mnt` mount initially
 - Keep good backups (this tool doesn't create them)
-- Cross-disk deduplication is currently logged but not executed (feature in development)
+- For cross-disk duplicates, use `skip` or `manual_review` mode unless you're certain you want to delete duplicates on other disks
+- When using `delete_duplicate` for cross-disk, understand that it permanently removes files and you lose redundancy across disks
 
 ## Performance
 

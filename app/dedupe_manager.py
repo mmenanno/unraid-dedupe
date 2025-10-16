@@ -128,7 +128,11 @@ class DedupeConfig:
                 {'pattern': '/mnt/user/data/downloads/*', 'priority': 2}
             ],
             'rmlint_options': {'algorithm': 'xxhash'},
-            'safety': {'verify_after_hardlink': True, 'keep_backups': False}
+            'safety': {
+                'verify_after_hardlink': True,
+                'keep_backups': False,
+                'cross_disk_action': 'manual_review'
+            }
         }
 
     def save(self, config: Dict) -> None:
@@ -161,7 +165,7 @@ class RmlintScanner:
 
         # Add exclude patterns
         for pattern in self.config.config.get('exclude_patterns', []):
-            cmd.extend(['--match-without-extension', pattern])
+            cmd.extend(['--exclude', pattern])
 
         # Add options
         cmd.extend([
@@ -421,25 +425,68 @@ class DedupeExecutor:
         return True
 
     def _execute_cross_disk(self, ds_dict: Dict) -> bool:
-        """Execute cross-disk deduplication (copy + hardlink + delete)"""
+        """Execute cross-disk deduplication based on configured action
+
+        Note: Hardlinks don't work across different disks/filesystems.
+        Options:
+        - skip: Don't process cross-disk duplicates (safest)
+        - delete_duplicate: Delete non-preferred duplicates (saves space, loses redundancy)
+        - manual_review: Skip and log for manual review
+        """
         keeper = ds_dict['keeper']
         if not keeper:
             return False
 
         keeper_path = keeper['path']
+        cross_disk_action = self.config.config.get('safety', {}).get('cross_disk_action', 'manual_review')
+
+        if cross_disk_action == 'skip':
+            logger.info(f"Skipping cross-disk duplicate set (keeper: {keeper_path})")
+            return True
 
         for file in ds_dict['files']:
-            if file['path'] == keeper_path:
+            file_path = file['path']
+            if file_path == keeper_path:
                 continue
 
             try:
-                # For cross-disk, we need to copy to the same disk first
-                # This is complex and needs careful handling
-                # For now, we'll just log a warning
-                logger.warning(f"Cross-disk deduplication not yet implemented: {file['path']}")
-                # TODO: Implement cross-disk logic
+                if cross_disk_action == 'manual_review':
+                    logger.info(f"Cross-disk duplicate marked for manual review: {file_path}")
+                    continue
+
+                elif cross_disk_action == 'delete_duplicate':
+                    # Verify files are actually on different disks
+                    keeper_stat = os.stat(keeper_path)
+                    dup_stat = os.stat(file_path)
+
+                    if keeper_stat.st_dev == dup_stat.st_dev:
+                        # Actually on same disk - can use hardlink instead
+                        logger.info(f"Files on same device, using hardlink: {file_path}")
+                        if not self._create_hardlink(keeper_path, file_path):
+                            return False
+                    else:
+                        # Different disks - delete duplicate after verification
+                        logger.warning(f"Deleting cross-disk duplicate: {file_path}")
+
+                        # Verify file sizes match as safety check
+                        if keeper_stat.st_size != dup_stat.st_size:
+                            logger.error(f"Size mismatch! Keeper: {keeper_stat.st_size}, Duplicate: {dup_stat.st_size}")
+                            return False
+
+                        # Create backup if configured
+                        if self.config.config.get('safety', {}).get('keep_backups', False):
+                            shutil.copy2(file_path, f"{file_path}.backup")
+                            logger.info(f"Created backup: {file_path}.backup")
+
+                        # Delete the duplicate
+                        os.remove(file_path)
+                        logger.info(f"Deleted cross-disk duplicate: {file_path}")
+                else:
+                    logger.error(f"Unknown cross_disk_action: {cross_disk_action}")
+                    return False
+
             except Exception as e:
-                logger.error(f"Failed to dedupe {file['path']}: {e}")
+                logger.error(f"Failed to process cross-disk duplicate {file_path}: {e}")
                 return False
 
         return True

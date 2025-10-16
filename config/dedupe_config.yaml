@@ -18,4 +18,9 @@ rmlint_options:
 safety:
   verify_after_hardlink: true
   keep_backups: false
+  # Cross-disk deduplication options:
+  # - "skip": Skip cross-disk duplicates (safest, no space savings)
+  # - "delete_duplicate": Delete non-preferred duplicates (saves space, loses redundancy)
+  # - "manual_review": Mark all cross-disk for manual review
+  cross_disk_action: "manual_review"  # Default: manual_review
 
