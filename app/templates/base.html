@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Unraid Deduplication Manager{% endblock %}</title>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo-icon.png') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='tailwind.generated.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -21,7 +21,7 @@
                 <!-- Logo/Brand -->
                 <div class="flex items-center gap-3">
                     <a href="/" class="flex items-center gap-3 hover:opacity-80 transition-opacity" aria-label="Unraid Dedupe Home">
-                        <img src="{{ url_for('static', filename='logo-icon.png') }}" alt="" class="w-10 h-10 rounded-lg" aria-hidden="true">
+                        <img src="{{ url_for('static', filename='icon.png') }}" alt="" class="w-10 h-10 rounded-lg" aria-hidden="true">
                         <h1 class="text-xl font-bold bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
                             Unraid Dedupe
                         </h1>
