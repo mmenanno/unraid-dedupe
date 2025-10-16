@@ -2,6 +2,44 @@
 
 /* Custom animations and effects that are complex to achieve with pure Tailwind */
 
+/* Utility classes for form components */
+.form-field-row {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    transition: all 0.2s;
+}
+
+.icon-btn-danger {
+    background-color: #dc2626;
+    color: white;
+}
+
+.icon-btn-danger:hover {
+    background-color: #b91c1c;
+}
+
+.collapsible-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.5rem;
+    transition: background-color 0.2s;
+    border-radius: 0.75rem 0.75rem 0 0;
+}
+
+.collapsible-header:hover {
+    background-color: rgba(51, 65, 85, 0.5);
+}
+
 /* Smooth scrolling for the entire page */
 html {
     scroll-behavior: smooth;

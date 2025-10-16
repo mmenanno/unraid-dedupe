@@ -1,0 +1,135 @@
+{# Icon macro - uses SVG sprite sheet #}
+{% macro icon(name, css_class="w-5 h-5") %}
+<svg class="{{ css_class }}"><use href="/static/icons.svg#icon-{{ name }}"/></svg>
+{% endmacro %}
+
+{# Help tooltip macro #}
+{% macro help_tooltip(text) %}
+<span data-tooltip="{{ text }}"
+      class="p-1 hover:bg-dark-700 rounded-full transition-colors cursor-help inline-flex"
+      role="img"
+      aria-label="Help">
+    {{ icon('help', 'w-4 h-4 text-dark-500 hover:text-primary-400') }}
+</span>
+{% endmacro %}
+
+{# Remove button macro #}
+{% macro remove_button(label="Remove", onclick="") %}
+<button
+    type="button"
+    {% if onclick %}onclick="{{ onclick }}"{% endif %}
+    data-action="remove"
+    class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+    aria-label="{{ label }}">
+    {{ icon('trash') }}
+</button>
+{% endmacro %}
+
+{# Text input with remove button macro #}
+{% macro text_input_field(name, value="", placeholder="", required=false, mono=false) %}
+<div class="flex gap-2" data-field>
+    <input
+        type="text"
+        name="{{ name }}"
+        {% if value %}value="{{ value }}"{% endif %}
+        {% if required %}required{% endif %}
+        {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+        class="flex-1 px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 placeholder-dark-500 {% if mono %}font-mono text-sm{% endif %} focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+        aria-label="{{ name | replace('[]', '') | replace('_', ' ') | title }}">
+    {{ remove_button(onclick="removeField(this.parentElement)") }}
+</div>
+{% endmacro %}
+
+{# Collapsible section header macro #}
+{% macro collapsible_section_header(id, title, subtitle, icon_name, icon_color, expanded=true) %}
+<button
+    type="button"
+    onclick="toggleSection('{{ id }}')"
+    class="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-700/50 transition-colors rounded-t-xl relative"
+    aria-expanded="{{ 'true' if expanded else 'false' }}"
+    aria-controls="{{ id }}">
+    <div class="flex items-center gap-3">
+        <svg class="w-6 h-6 text-{{ icon_color }}"><use href="/static/icons.svg#icon-{{ icon_name }}"/></svg>
+        <div class="text-left">
+            <h3 class="text-lg font-semibold text-dark-100">{{ title }}</h3>
+            <p class="text-sm text-dark-400">{{ subtitle }}</p>
+        </div>
+    </div>
+    <svg class="w-5 h-5 text-dark-400 transition-transform section-chevron"><use href="/static/icons.svg#icon-chevron-down"/></svg>
+</button>
+{% endmacro %}
+
+{# Collapsible section with help tooltip #}
+{% macro collapsible_section_header_with_help(id, title, subtitle, icon_name, icon_color, help_text="", expanded=true) %}
+<button
+    type="button"
+    onclick="toggleSection('{{ id }}')"
+    class="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-700/50 transition-colors rounded-t-xl relative"
+    aria-expanded="{{ 'true' if expanded else 'false' }}"
+    aria-controls="{{ id }}">
+    <div class="flex items-center gap-3">
+        <svg class="w-6 h-6 text-{{ icon_color }}"><use href="/static/icons.svg#icon-{{ icon_name }}"/></svg>
+        <div class="text-left">
+            <h3 class="text-lg font-semibold text-dark-100 flex items-center gap-2">
+                {{ title }}
+                {% if help_text %}
+                    {{ help_tooltip(help_text) }}
+                {% endif %}
+            </h3>
+            <p class="text-sm text-dark-400">{{ subtitle }}</p>
+        </div>
+    </div>
+    <svg class="w-5 h-5 text-dark-400 transition-transform section-chevron"><use href="/static/icons.svg#icon-chevron-down"/></svg>
+</button>
+{% endmacro %}
+
+{# Add button macro #}
+{% macro add_button(text, onclick) %}
+<button
+    type="button"
+    onclick="{{ onclick }}"
+    class="mt-3 px-4 py-2 bg-dark-700 hover:bg-dark-600 text-dark-200 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 flex items-center gap-2">
+    {{ icon('plus') }}
+    {{ text }}
+</button>
+{% endmacro %}
+
+{# Info box macro #}
+{% macro info_box(content, color="blue") %}
+<div class="mb-3 p-3 bg-{{ color }}-900/20 border border-{{ color }}-700/50 rounded-lg">
+    <p class="text-sm text-{{ color }}-300 flex items-start gap-2">
+        {{ icon('info', 'w-5 h-5 flex-shrink-0 mt-0.5') }}
+        <span>{{ content | safe }}</span>
+    </p>
+</div>
+{% endmacro %}
+
+{# Path preference field macro #}
+{% macro path_preference_field(pattern="", priority=1) %}
+<div class="grid sm:grid-cols-[1fr_auto_auto] gap-2 items-start bg-dark-900/50 p-3 rounded-lg border border-dark-700" data-field>
+    <div>
+        <label class="block text-xs text-dark-400 uppercase tracking-wider mb-1">Pattern</label>
+        <input
+            type="text"
+            name="pref_pattern[]"
+            value="{{ pattern }}"
+            required
+            placeholder="/mnt/user/data/*"
+            class="w-full px-3 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 placeholder-dark-500 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
+    </div>
+    <div>
+        <label class="block text-xs text-dark-400 uppercase tracking-wider mb-1">Priority</label>
+        <input
+            type="number"
+            name="pref_priority[]"
+            value="{{ priority }}"
+            required
+            min="1"
+            class="w-24 px-3 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
+    </div>
+    <div class="sm:pt-6">
+        {{ remove_button(onclick="removeField(this.closest('.grid'))") }}
+    </div>
+</div>
+{% endmacro %}
+

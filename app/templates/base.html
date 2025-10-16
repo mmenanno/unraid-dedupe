@@ -7,8 +7,12 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='tailwind.generated.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body class="bg-dark-900 text-dark-100 min-h-screen flex flex-col">
+    <!-- SVG Sprite Sheet -->
+    {% include 'partials/icons.html' ignore missing %}
+
     <!-- Skip to main content for accessibility -->
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary-600 focus:text-white focus:rounded-lg focus:shadow-lg">
         Skip to main content

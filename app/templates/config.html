@@ -1,307 +1,85 @@
 {% extends "base.html" %}
+{% from 'macros/form_components.html' import icon, help_tooltip, remove_button, text_input_field, collapsible_section_header, collapsible_section_header_with_help, add_button, info_box, path_preference_field %}
 
 {% block title %}Configuration - Unraid Dedupe{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6" x-data="configPage()" x-init="init()">
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h2 class="text-3xl font-bold text-dark-50">Configuration</h2>
         <div class="flex gap-2">
-            <button onclick="exportConfig()"
+            <button @click="exportConfig"
                     class="px-4 py-2 bg-dark-700 hover:bg-dark-600 text-dark-200 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 flex items-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
+                {{ icon('download') }}
                 Export
             </button>
-            <button onclick="document.getElementById('import-input').click()"
+            <button @click="$refs.importInput.click()"
                     class="px-4 py-2 bg-dark-700 hover:bg-dark-600 text-dark-200 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 flex items-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                </svg>
+                {{ icon('upload') }}
                 Import
             </button>
-            <input type="file" id="import-input" accept=".json,.yaml,.yml" onchange="importConfig(event)" class="hidden">
+            <input type="file" x-ref="importInput" accept=".json,.yaml,.yml" @change="importConfig($event)" class="hidden">
         </div>
     </div>
 
-    <form id="config-form" onsubmit="saveConfig(event)" class="space-y-6">
+    <form id="config-form" @submit.prevent="saveConfig" class="space-y-6">
         <!-- Scan Paths Section -->
         <div class="bg-dark-800 border border-dark-700 rounded-xl shadow-xl overflow-hidden">
-            <button
-                type="button"
-                onclick="toggleSection('scan-paths-section')"
-                class="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-700/50 transition-colors rounded-t-xl relative"
-                aria-expanded="true"
-                aria-controls="scan-paths-section">
-                <div class="flex items-center gap-3">
-                    <svg class="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                    </svg>
-                    <div class="text-left">
-                        <h3 class="text-lg font-semibold text-dark-100">Scan Paths</h3>
-                        <p class="text-sm text-dark-400">Directories to scan for duplicate files</p>
-                    </div>
-                </div>
-                <svg class="w-5 h-5 text-dark-400 transition-transform section-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
-            </button>
+            {{ collapsible_section_header('scan-paths-section', 'Scan Paths', 'Directories to scan for duplicate files', 'folder', 'primary-400', true) }}
             <div id="scan-paths-section" class="px-6 pb-6 pt-4">
                 <div id="scan-paths" class="space-y-3">
                     {% for path in config.scan_paths %}
-                    <div class="flex gap-2">
-                        <input
-                            type="text"
-                            name="scan_paths[]"
-                            value="{{ path }}"
-                            required
-                            placeholder="/mnt/user/data"
-                            class="flex-1 px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 placeholder-dark-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                            aria-label="Scan path">
-                        <button
-                            type="button"
-                            onclick="removeField(this.parentElement)"
-                            class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
-                            aria-label="Remove path">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                        </button>
-                    </div>
+                    {{ text_input_field('scan_paths[]', path, '/mnt/user/data', required=true) }}
                     {% endfor %}
                 </div>
-                <button
-                    type="button"
-                    onclick="addScanPath()"
-                    class="mt-3 px-4 py-2 bg-dark-700 hover:bg-dark-600 text-dark-200 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 flex items-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    Add Path
-                </button>
+                {{ add_button('Add Path', 'addScanPath()') }}
             </div>
         </div>
 
         <!-- Exclude Patterns Section -->
         <div class="bg-dark-800 border border-dark-700 rounded-xl shadow-xl overflow-hidden">
-            <button
-                type="button"
-                onclick="toggleSection('exclude-section')"
-                class="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-700/50 transition-colors rounded-t-xl relative"
-                aria-expanded="true"
-                aria-controls="exclude-section">
-                <div class="flex items-center gap-3">
-                    <svg class="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                    </svg>
-                    <div class="text-left">
-                        <h3 class="text-lg font-semibold text-dark-100">Exclude Patterns</h3>
-                        <p class="text-sm text-dark-400">Glob patterns for files/folders to skip</p>
-                    </div>
-                </div>
-                <svg class="w-5 h-5 text-dark-400 transition-transform section-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
-            </button>
+            {{ collapsible_section_header('exclude-section', 'Exclude Patterns', 'Glob patterns for files/folders to skip', 'ban', 'yellow-400', true) }}
             <div id="exclude-section" class="px-6 pb-6 pt-4">
-                <div class="mb-3 p-3 bg-blue-900/20 border border-blue-700/50 rounded-lg">
-                    <p class="text-sm text-blue-300 flex items-start gap-2 mb-3">
-                        <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1 a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-                        </svg>
-                        <span>Use glob patterns like <code class="bg-dark-900 px-1.5 py-0.5 rounded">*.tmp</code> or <code class="bg-dark-900 px-1.5 py-0.5 rounded">*/.Trash-*</code></span>
-                    </p>
-                    <div class="pl-7">
-                        <p class="text-xs text-blue-200 mb-2 font-semibold">Common patterns (click to add):</p>
-                        <div class="flex flex-wrap gap-2">
-                            <button type="button" onclick="addExcludePatternWithValue('*.tmp')"
-                                    class="px-2 py-1 bg-dark-900/50 hover:bg-dark-900 text-xs text-blue-300 rounded border border-blue-800 hover:border-blue-600 transition-all">
-                                *.tmp
-                            </button>
-                            <button type="button" onclick="addExcludePatternWithValue('*/.Trash-*')"
-                                    class="px-2 py-1 bg-dark-900/50 hover:bg-dark-900 text-xs text-blue-300 rounded border border-blue-800 hover:border-blue-600 transition-all">
-                                */.Trash-*
-                            </button>
-                            <button type="button" onclick="addExcludePatternWithValue('*/System Volume Information/*')"
-                                    class="px-2 py-1 bg-dark-900/50 hover:bg-dark-900 text-xs text-blue-300 rounded border border-blue-800 hover:border-blue-600 transition-all">
-                                System Volume Info
-                            </button>
-                            <button type="button" onclick="addExcludePatternWithValue('*/@eaDir/*')"
-                                    class="px-2 py-1 bg-dark-900/50 hover:bg-dark-900 text-xs text-blue-300 rounded border border-blue-800 hover:border-blue-600 transition-all">
-                                Synology @eaDir
-                            </button>
-                            <button type="button" onclick="addExcludePatternWithValue('*/._*')"
-                                    class="px-2 py-1 bg-dark-900/50 hover:bg-dark-900 text-xs text-blue-300 rounded border border-blue-800 hover:border-blue-600 transition-all">
-                                macOS Resource Forks
-                            </button>
-                            <button type="button" onclick="addExcludePatternWithValue('*.log')"
-                                    class="px-2 py-1 bg-dark-900/50 hover:bg-dark-900 text-xs text-blue-300 rounded border border-blue-800 hover:border-blue-600 transition-all">
-                                *.log
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                {{ info_box('Use glob patterns like <code class="bg-dark-900 px-1.5 py-0.5 rounded">*.tmp</code> or <code class="bg-dark-900 px-1.5 py-0.5 rounded">*/.Trash-*</code><br><br><strong class="text-xs">Common patterns (click to add):</strong><br><div class="flex flex-wrap gap-2 mt-2">' +
+                    '<button type="button" @click="addExcludePatternWithValue(\'*.tmp\')" class="px-2 py-1 bg-dark-900/50 hover:bg-dark-900 text-xs text-blue-300 rounded border border-blue-800 hover:border-blue-600 transition-all">*.tmp</button>' +
+                    '<button type="button" @click="addExcludePatternWithValue(\'*/.Trash-*\')" class="px-2 py-1 bg-dark-900/50 hover:bg-dark-900 text-xs text-blue-300 rounded border border-blue-800 hover:border-blue-600 transition-all">*/.Trash-*</button>' +
+                    '<button type="button" @click="addExcludePatternWithValue(\'*/System Volume Information/*\')" class="px-2 py-1 bg-dark-900/50 hover:bg-dark-900 text-xs text-blue-300 rounded border border-blue-800 hover:border-blue-600 transition-all">System Volume Info</button>' +
+                    '<button type="button" @click="addExcludePatternWithValue(\'*/@eaDir/*\')" class="px-2 py-1 bg-dark-900/50 hover:bg-dark-900 text-xs text-blue-300 rounded border border-blue-800 hover:border-blue-600 transition-all">Synology @eaDir</button>' +
+                    '<button type="button" @click="addExcludePatternWithValue(\'*/._*\')" class="px-2 py-1 bg-dark-900/50 hover:bg-dark-900 text-xs text-blue-300 rounded border border-blue-800 hover:border-blue-600 transition-all">macOS Resource Forks</button>' +
+                    '<button type="button" @click="addExcludePatternWithValue(\'*.log\')" class="px-2 py-1 bg-dark-900/50 hover:bg-dark-900 text-xs text-blue-300 rounded border border-blue-800 hover:border-blue-600 transition-all">*.log</button>' +
+                    '</div>') }}
                 <div id="exclude-patterns" class="space-y-3">
                     {% for pattern in config.exclude_patterns %}
-                    <div class="flex gap-2">
-                        <input
-                            type="text"
-                            name="exclude_patterns[]"
-                            value="{{ pattern }}"
-                            placeholder="*.tmp"
-                            class="flex-1 px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 placeholder-dark-500 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                            aria-label="Exclude pattern">
-                        <button
-                            type="button"
-                            onclick="removeField(this.parentElement)"
-                            class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
-                            aria-label="Remove pattern">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                        </button>
-                    </div>
+                    {{ text_input_field('exclude_patterns[]', pattern, '*.tmp', mono=true) }}
                     {% endfor %}
                 </div>
-                <button
-                    type="button"
-                    onclick="addExcludePattern()"
-                    class="mt-3 px-4 py-2 bg-dark-700 hover:bg-dark-600 text-dark-200 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 flex items-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    Add Pattern
-                </button>
+                {{ add_button('Add Pattern', 'addExcludePattern()') }}
             </div>
         </div>
 
         <!-- Path Preferences Section -->
         <div class="bg-dark-800 border border-dark-700 rounded-xl shadow-xl overflow-hidden">
-            <button
-                type="button"
-                onclick="toggleSection('prefs-section')"
-                class="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-700/50 transition-colors rounded-t-xl relative"
-                aria-expanded="true"
-                aria-controls="prefs-section">
-                <div class="flex items-center gap-3">
-                    <svg class="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                    </svg>
-                    <div class="text-left">
-                        <h3 class="text-lg font-semibold text-dark-100 flex items-center gap-2">
-                            Path Preferences
-                            <span data-tooltip="Path preferences determine which file to keep when duplicates are found. Lower priority numbers mean higher preference. For example, priority 1 files are kept over priority 2 files."
-                                    class="p-1 hover:bg-dark-700 rounded-full transition-colors cursor-help inline-flex"
-                                    role="img"
-                                    aria-label="Help for path preferences">
-                                <svg class="w-4 h-4 text-dark-500 hover:text-primary-400" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
-                                </svg>
-                            </span>
-                        </h3>
-                        <p class="text-sm text-dark-400">Define which locations to prefer when choosing keepers</p>
-                    </div>
-                </div>
-                <svg class="w-5 h-5 text-dark-400 transition-transform section-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
-            </button>
+            {{ collapsible_section_header_with_help('prefs-section', 'Path Preferences', 'Define which locations to prefer when choosing keepers', 'clipboard', 'purple-400', 'Path preferences determine which file to keep when duplicates are found. Lower priority numbers mean higher preference. For example, priority 1 files are kept over priority 2 files.', true) }}
             <div id="prefs-section" class="px-6 pb-6 pt-4">
-                <div class="mb-3 p-3 bg-purple-900/20 border border-purple-700/50 rounded-lg">
-                    <p class="text-sm text-purple-300 flex items-start gap-2">
-                        <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-                        </svg>
-                        <span>Lower priority number = higher preference. Files matching the lowest priority become keepers.</span>
-                    </p>
-                </div>
+                {{ info_box('Lower priority number = higher preference. Files matching the lowest priority become keepers.', 'purple') }}
                 <div id="path-preferences" class="space-y-3">
                     {% for pref in config.path_preferences %}
-                    <div class="grid sm:grid-cols-[1fr_auto_auto] gap-2 items-start bg-dark-900/50 p-3 rounded-lg border border-dark-700">
-                        <div>
-                            <label class="block text-xs text-dark-400 uppercase tracking-wider mb-1">Pattern</label>
-                            <input
-                                type="text"
-                                name="pref_pattern[]"
-                                value="{{ pref.pattern }}"
-                                required
-                                placeholder="/mnt/user/data/*"
-                                class="w-full px-3 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 placeholder-dark-500 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
-                        </div>
-                        <div>
-                            <label class="block text-xs text-dark-400 uppercase tracking-wider mb-1">Priority</label>
-                            <input
-                                type="number"
-                                name="pref_priority[]"
-                                value="{{ pref.priority }}"
-                                required
-                                min="1"
-                                class="w-24 px-3 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
-                        </div>
-                        <div class="sm:pt-6">
-                            <button
-                                type="button"
-                                onclick="removeField(this.closest('.grid'))"
-                                class="w-full sm:w-auto px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
-                                aria-label="Remove preference">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
+                    {{ path_preference_field(pref.pattern, pref.priority) }}
                     {% endfor %}
                 </div>
-                <button
-                    type="button"
-                    onclick="addPathPreference()"
-                    class="mt-3 px-4 py-2 bg-dark-700 hover:bg-dark-600 text-dark-200 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 flex items-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    Add Preference
-                </button>
+                {{ add_button('Add Preference', 'addPathPreference()') }}
             </div>
         </div>
 
         <!-- Rmlint Options Section -->
         <div class="bg-dark-800 border border-dark-700 rounded-xl shadow-xl overflow-hidden">
-            <button
-                type="button"
-                onclick="toggleSection('rmlint-section')"
-                class="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-700/50 transition-colors rounded-t-xl relative"
-                aria-expanded="false"
-                aria-controls="rmlint-section">
-                <div class="flex items-center gap-3">
-                    <svg class="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <div class="text-left">
-                        <h3 class="text-lg font-semibold text-dark-100 flex items-center gap-2">
-                            Rmlint Options
-                            <span data-tooltip="Rmlint uses checksums to identify duplicate files. xxhash is fastest and recommended for most users. SHA256/SHA512 provide cryptographic security but are slower."
-                                    class="p-1 hover:bg-dark-700 rounded-full transition-colors cursor-help inline-flex"
-                                    role="img"
-                                    aria-label="Help for rmlint options">
-                                <svg class="w-4 h-4 text-dark-500 hover:text-primary-400" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
-                                </svg>
-                            </span>
-                        </h3>
-                        <p class="text-sm text-dark-400">Checksum algorithm configuration</p>
-                    </div>
-                </div>
-                <svg class="w-5 h-5 text-dark-400 transition-transform section-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
-            </button>
+            {{ collapsible_section_header_with_help('rmlint-section', 'Rmlint Options', 'Checksum algorithm configuration', 'settings', 'green-400', 'Rmlint uses checksums to identify duplicate files. xxhash is fastest and recommended for most users. SHA256/SHA512 provide cryptographic security but are slower.', false) }}
             <div id="rmlint-section" class="hidden px-6 pb-6 pt-4 rounded-b-xl">
                 <label class="block text-sm text-dark-300 font-medium mb-2">Algorithm</label>
                 <select
                     id="algorithm"
                     name="algorithm"
+                    @change="markFormDirty"
                     class="w-full px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all cursor-pointer">
                     <option value="xxhash" {% if config.rmlint_options.algorithm == 'xxhash' %}selected{% endif %}>xxhash (fast, recommended)</option>
                     <option value="sha256" {% if config.rmlint_options.algorithm == 'sha256' %}selected{% endif %}>sha256 (secure)</option>
@@ -313,32 +91,12 @@
 
         <!-- Safety Options Section -->
         <div class="bg-dark-800 border border-dark-700 rounded-xl shadow-xl overflow-hidden">
-            <button
-                type="button"
-                onclick="toggleSection('safety-section')"
-                class="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-700/50 transition-colors rounded-t-xl relative"
-                aria-expanded="false"
-                aria-controls="safety-section">
-                <div class="flex items-center gap-3">
-                    <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                    </svg>
-                    <div class="text-left">
-                        <h3 class="text-lg font-semibold text-dark-100">Safety Options</h3>
-                        <p class="text-sm text-dark-400">Verification and backup settings</p>
-                    </div>
-                </div>
-                <svg class="w-5 h-5 text-dark-400 transition-transform section-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
-            </button>
+            {{ collapsible_section_header('safety-section', 'Safety Options', 'Verification and backup settings', 'shield', 'blue-400', false) }}
             <div id="safety-section" class="hidden px-6 pb-6 pt-4 space-y-4">
                 <!-- Cross-disk action warning -->
-                <div id="cross-disk-warning" class="hidden p-4 bg-red-900/30 border-2 border-red-700 rounded-lg">
+                <div x-show="crossDiskAction === 'delete_duplicate'" x-cloak class="p-4 bg-red-900/30 border-2 border-red-700 rounded-lg">
                     <div class="flex items-start gap-3">
-                        <svg class="w-6 h-6 text-red-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                        </svg>
+                        {{ icon('warning', 'w-6 h-6 text-red-400 flex-shrink-0 mt-0.5') }}
                         <div class="flex-1">
                             <h4 class="text-red-300 font-bold mb-2">⚠️ DANGER: Cross-Disk Delete Enabled</h4>
                             <p class="text-red-200 text-sm mb-2">
@@ -356,6 +114,7 @@
                     <input
                         type="checkbox"
                         name="verify_after_hardlink"
+                        @change="markFormDirty"
                         {% if config.safety.verify_after_hardlink %}checked{% endif %}
                         class="mt-1 w-5 h-5 rounded border-dark-600 bg-dark-900 text-primary-600 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-dark-800 cursor-pointer transition-colors">
                     <div class="flex-1">
@@ -367,6 +126,7 @@
                     <input
                         type="checkbox"
                         name="keep_backups"
+                        @change="markFormDirty"
                         {% if config.safety.keep_backups %}checked{% endif %}
                         class="mt-1 w-5 h-5 rounded border-dark-600 bg-dark-900 text-primary-600 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-dark-800 cursor-pointer transition-colors">
                     <div class="flex-1">
@@ -380,7 +140,8 @@
                     <select
                         id="cross-disk-action"
                         name="cross_disk_action"
-                        onchange="updateCrossDiskWarning()"
+                        x-model="crossDiskAction"
+                        @change="markFormDirty"
                         class="w-full px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all cursor-pointer">
                         <option value="skip" {% if config.safety.get('cross_disk_action', 'skip') == 'skip' %}selected{% endif %}>Skip (Safest - Do Nothing)</option>
                         <option value="manual_review" {% if config.safety.get('cross_disk_action') == 'manual_review' %}selected{% endif %}>Manual Review (Log for Review)</option>
@@ -392,15 +153,14 @@
         </div>
 
         <!-- Action Buttons -->
-        <div id="action-buttons" class="hidden flex-col sm:flex-row gap-3 sticky bottom-4 bg-dark-900/95 backdrop-blur-lg border border-dark-700 rounded-xl p-4 shadow-2xl transition-all">
+        <div x-show="isDirty" x-cloak
+             class="flex flex-col sm:flex-row gap-3 sticky bottom-4 bg-dark-900/95 backdrop-blur-lg border border-dark-700 rounded-xl p-4 shadow-2xl transition-all">
             <button
                 type="button"
-                onclick="validateConfig()"
+                @click="validateConfig"
                 class="flex-1 sm:flex-none px-6 py-3 bg-dark-700 hover:bg-dark-600 text-dark-200 font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-dark-900">
                 <span class="flex items-center justify-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+                    {{ icon('check-circle') }}
                     Validate Configuration
                 </span>
             </button>
@@ -408,456 +168,391 @@
                 type="submit"
                 class="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-dark-900">
                 <span class="flex items-center justify-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                    </svg>
+                    {{ icon('check') }}
                     Save Configuration
                 </span>
             </button>
             <button
                 type="button"
-                onclick="location.reload()"
+                @click="location.reload()"
                 class="flex-1 sm:flex-none px-6 py-3 bg-dark-700 hover:bg-dark-600 text-dark-200 font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-dark-900">
                 Cancel
             </button>
         </div>
     </form>
 </div>
+
+<!-- HTML Templates for Dynamic Fields -->
+<template id="scan-path-template">
+    <div class="flex gap-2" data-field>
+        <input
+            type="text"
+            name="scan_paths[]"
+            required
+            placeholder="/mnt/user/data"
+            class="flex-1 px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 placeholder-dark-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+            aria-label="Scan path">
+        <button
+            type="button"
+            data-action="remove"
+            class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+            aria-label="Remove path">
+            <svg class="w-5 h-5"><use href="/static/icons.svg#icon-trash"/></svg>
+        </button>
+    </div>
+</template>
+
+<template id="exclude-pattern-template">
+    <div class="flex gap-2" data-field>
+        <input
+            type="text"
+            name="exclude_patterns[]"
+            placeholder="*.tmp"
+            class="flex-1 px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 placeholder-dark-500 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+            aria-label="Exclude pattern">
+        <button
+            type="button"
+            data-action="remove"
+            class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+            aria-label="Remove pattern">
+            <svg class="w-5 h-5"><use href="/static/icons.svg#icon-trash"/></svg>
+        </button>
+    </div>
+</template>
+
+<template id="path-preference-template">
+    <div class="grid sm:grid-cols-[1fr_auto_auto] gap-2 items-start bg-dark-900/50 p-3 rounded-lg border border-dark-700" data-field>
+        <div>
+            <label class="block text-xs text-dark-400 uppercase tracking-wider mb-1">Pattern</label>
+            <input
+                type="text"
+                name="pref_pattern[]"
+                required
+                placeholder="/mnt/user/data/*"
+                class="w-full px-3 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 placeholder-dark-500 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
+        </div>
+        <div>
+            <label class="block text-xs text-dark-400 uppercase tracking-wider mb-1">Priority</label>
+            <input
+                type="number"
+                name="pref_priority[]"
+                required
+                min="1"
+                value="1"
+                class="w-24 px-3 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
+        </div>
+        <div class="sm:pt-6">
+            <button
+                type="button"
+                data-action="remove"
+                class="w-full sm:w-auto px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                aria-label="Remove preference">
+                <svg class="w-5 h-5"><use href="/static/icons.svg#icon-trash"/></svg>
+            </button>
+        </div>
+    </div>
+</template>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    // Track form dirty state
-    let formIsDirty = false;
-    const actionButtons = document.getElementById('action-buttons');
+// Alpine.js component for config page
+function configPage() {
+    return {
+        isDirty: false,
+        crossDiskAction: '{{ config.safety.get("cross_disk_action", "skip") }}',
 
-    function markFormDirty() {
-        if (!formIsDirty) {
-            formIsDirty = true;
-            if (actionButtons) {
-                actionButtons.classList.remove('hidden');
-                actionButtons.classList.add('flex');
+        init() {
+            // Initialize chevrons based on current aria-expanded state
+            document.querySelectorAll('[aria-controls]').forEach(button => {
+                const chevron = button.querySelector('.section-chevron');
+                const isExpanded = button.getAttribute('aria-expanded') === 'true';
+                if (chevron) {
+                    chevron.style.transform = isExpanded ? 'rotate(0)' : 'rotate(-90deg)';
+                }
+            });
+
+            // Event delegation for form changes
+            const form = document.getElementById('config-form');
+            form.addEventListener('input', () => this.markFormDirty());
+            form.addEventListener('change', () => this.markFormDirty());
+
+            // Event delegation for remove buttons
+            form.addEventListener('click', (e) => {
+                if (e.target.closest('[data-action="remove"]')) {
+                    e.target.closest('[data-field]').remove();
+                    this.markFormDirty();
+                }
+            });
+        },
+
+        markFormDirty() {
+            this.isDirty = true;
+        },
+
+        markFormClean() {
+            this.isDirty = false;
+        },
+
+        // Build config from form data (single source of truth)
+        buildConfigFromForm(formData) {
+            const patterns = formData.getAll('pref_pattern[]');
+            const priorities = formData.getAll('pref_priority[]');
+            const pathPreferences = [];
+
+            for (let i = 0; i < patterns.length; i++) {
+                if (patterns[i]) {
+                    pathPreferences.push({
+                        pattern: patterns[i],
+                        priority: parseInt(priorities[i])
+                    });
+                }
             }
-        }
-    }
 
-    function markFormClean() {
-        formIsDirty = false;
-        if (actionButtons) {
-            actionButtons.classList.add('hidden');
-            actionButtons.classList.remove('flex');
-        }
-    }
+            return {
+                scan_paths: formData.getAll('scan_paths[]').filter(v => v),
+                exclude_patterns: formData.getAll('exclude_patterns[]').filter(v => v),
+                path_preferences: pathPreferences,
+                rmlint_options: {
+                    algorithm: formData.get('algorithm')
+                },
+                safety: {
+                    verify_after_hardlink: formData.get('verify_after_hardlink') === 'on',
+                    keep_backups: formData.get('keep_backups') === 'on',
+                    cross_disk_action: formData.get('cross_disk_action')
+                }
+            };
+        },
 
-    // Initialize page on load
-    document.addEventListener('DOMContentLoaded', () => {
-        // Initialize chevrons based on current aria-expanded state (respect HTML defaults)
-        const buttons = document.querySelectorAll('[aria-controls]');
-        buttons.forEach(button => {
-            const chevron = button.querySelector('.section-chevron');
-            const isExpanded = button.getAttribute('aria-expanded') === 'true';
-            if (chevron) {
-                chevron.style.transform = isExpanded ? 'rotate(0)' : 'rotate(-90deg)';
-            }
-        });
+        // Add field from template
+        addFieldFromTemplate(containerId, templateId, focusSelector = 'input') {
+            const container = document.getElementById(containerId);
+            const template = document.getElementById(templateId);
+            const clone = template.content.cloneNode(true);
+            container.appendChild(clone);
+            container.lastElementChild.querySelector(focusSelector)?.focus();
+            this.markFormDirty();
+        },
 
-        updateCrossDiskWarning();
+        exportConfig() {
+            fetch('/api/config')
+                .then(response => response.json())
+                .then(config => {
+                    const dataStr = JSON.stringify(config, null, 2);
+                    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                    const url = URL.createObjectURL(dataBlob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+                    link.download = `dedupe-config-${timestamp}.json`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                    showToast('Configuration exported successfully!', 'success');
+                })
+                .catch(error => {
+                    console.error('Export failed:', error);
+                    showToast('Failed to export configuration', 'error');
+                });
+        },
 
-        // Track form changes
-        const form = document.getElementById('config-form');
-        if (form) {
-            // Listen to all input, select, and textarea changes
-            form.addEventListener('input', markFormDirty);
-            form.addEventListener('change', markFormDirty);
-        }
-    });
+        importConfig(event) {
+            const file = event.target.files[0];
+            if (!file) return;
 
-    function exportConfig() {
-        fetch('/api/config')
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const config = JSON.parse(e.target.result);
+
+                    // Validate config structure
+                    if (!config.scan_paths || !config.rmlint_options || !config.safety) {
+                        throw new Error('Invalid configuration file structure');
+                    }
+
+                    // Show confirmation modal
+                    showModal(
+                        'Import Configuration?',
+                        `This will replace your current configuration with settings from "${file.name}". Your current settings will be lost. Continue?`,
+                        [
+                            { text: 'Cancel', primary: false },
+                            {
+                                text: 'Import',
+                                danger: true,
+                                onClick: () => {
+                                    fetch('/api/config', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify(config)
+                                    })
+                                    .then(response => response.json())
+                                    .then(data => {
+                                        if (data.success) {
+                                            showToast('Configuration imported successfully! Reloading...', 'success');
+                                            setTimeout(() => location.reload(), 1500);
+                                        } else {
+                                            showToast('Failed to import: ' + data.error, 'error');
+                                        }
+                                    })
+                                    .catch(error => {
+                                        console.error('Import failed:', error);
+                                        showToast('Failed to import configuration', 'error');
+                                    });
+                                }
+                            }
+                        ]
+                    );
+                } catch (error) {
+                    console.error('Parse error:', error);
+                    showToast('Invalid configuration file: ' + error.message, 'error');
+                }
+            };
+            reader.readAsText(file);
+
+            // Reset input so same file can be imported again
+            event.target.value = '';
+        },
+
+        validateConfig() {
+            const formData = new FormData(document.getElementById('config-form'));
+            const config = this.buildConfigFromForm(formData);
+
+            fetch('/api/config/validate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            })
             .then(response => response.json())
-            .then(config => {
-                const dataStr = JSON.stringify(config, null, 2);
-                const dataBlob = new Blob([dataStr], { type: 'application/json' });
-                const url = URL.createObjectURL(dataBlob);
-                const link = document.createElement('a');
-                link.href = url;
-                const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-                link.download = `dedupe-config-${timestamp}.json`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
-                showToast('Configuration exported successfully!', 'success');
+            .then(data => {
+                if (data.valid) {
+                    let message = 'Configuration is valid!';
+                    if (data.warnings && data.warnings.length > 0) {
+                        message += '\n\nWarnings:\n' + data.warnings.join('\n');
+                        showModal('Validation Successful (with warnings)', message, [
+                            { text: 'OK', primary: true }
+                        ]);
+                    } else {
+                        showToast(message, 'success');
+                    }
+                } else {
+                    let message = 'Configuration has errors:\n\n' + data.errors.join('\n');
+                    if (data.warnings && data.warnings.length > 0) {
+                        message += '\n\nWarnings:\n' + data.warnings.join('\n');
+                    }
+                    showModal('Validation Failed', message, [
+                        { text: 'OK', primary: false }
+                    ]);
+                }
             })
             .catch(error => {
-                console.error('Export failed:', error);
-                showToast('Failed to export configuration', 'error');
+                console.error('Error:', error);
+                showToast('Failed to validate configuration', 'error');
             });
-    }
+        },
 
-    function importConfig(event) {
-        const file = event.target.files[0];
-        if (!file) return;
+        saveConfig(event) {
+            const form = event.target;
+            const formData = new FormData(form);
+            const submitBtn = form.querySelector('button[type="submit"]');
 
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const config = JSON.parse(e.target.result);
-
-                // Validate config structure
-                if (!config.scan_paths || !config.rmlint_options || !config.safety) {
-                    throw new Error('Invalid configuration file structure');
-                }
-
-                // Show confirmation modal
-                showModal(
-                    'Import Configuration?',
-                    `This will replace your current configuration with settings from "${file.name}". Your current settings will be lost. Continue?`,
-                    [
-                        {
-                            text: 'Cancel',
-                            primary: false
-                        },
-                        {
-                            text: 'Import',
-                            danger: true,
-                            onClick: () => {
-                                fetch('/api/config', {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json'
-                                    },
-                                    body: JSON.stringify(config)
-                                })
-                                .then(response => response.json())
-                                .then(data => {
-                                    if (data.success) {
-                                        showToast('Configuration imported successfully! Reloading...', 'success');
-                                        setTimeout(() => location.reload(), 1500);
-                                    } else {
-                                        showToast('Failed to import: ' + data.error, 'error');
-                                    }
-                                })
-                                .catch(error => {
-                                    console.error('Import failed:', error);
-                                    showToast('Failed to import configuration', 'error');
-                                });
-                            }
-                        }
-                    ]
-                );
-            } catch (error) {
-                console.error('Parse error:', error);
-                showToast('Invalid configuration file: ' + error.message, 'error');
+            if (!submitBtn) {
+                console.error('Submit button not found');
+                showToast('Failed to save configuration', 'error');
+                return;
             }
-        };
-        reader.readAsText(file);
 
-        // Reset input so same file can be imported again
-        event.target.value = '';
-    }
+            // Show loading state
+            const originalContent = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="flex items-center justify-center gap-2"><svg class="animate-spin h-5 w-5"><use href="/static/icons.svg#icon-spinner"/></svg>Saving...</span>';
 
-    function updateCrossDiskWarning() {
-        const select = document.getElementById('cross-disk-action');
-        const warning = document.getElementById('cross-disk-warning');
+            const config = this.buildConfigFromForm(formData);
 
-        if (select.value === 'delete_duplicate') {
-            warning.classList.remove('hidden');
-        } else {
-            warning.classList.add('hidden');
-        }
-    }
+            // Send to API
+            fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            })
+            .then(response => response.json())
+            .then(data => {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalContent;
 
-    function validateConfig() {
-        // Build config object
-        const formData = new FormData(document.getElementById('config-form'));
-        const config = {
-            scan_paths: formData.getAll('scan_paths[]').filter(v => v),
-            exclude_patterns: formData.getAll('exclude_patterns[]').filter(v => v),
-            path_preferences: [],
-            rmlint_options: {
-                algorithm: formData.get('algorithm')
-            },
-            safety: {
-                verify_after_hardlink: formData.get('verify_after_hardlink') === 'on',
-                keep_backups: formData.get('keep_backups') === 'on',
-                cross_disk_action: formData.get('cross_disk_action')
-            }
-        };
-
-        // Build path preferences
-        const patterns = formData.getAll('pref_pattern[]');
-        const priorities = formData.getAll('pref_priority[]');
-        for (let i = 0; i < patterns.length; i++) {
-            if (patterns[i]) {
-                config.path_preferences.push({
-                    pattern: patterns[i],
-                    priority: parseInt(priorities[i])
-                });
-            }
-        }
-
-        // Validate
-        fetch('/api/config/validate', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(config)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.valid) {
-                let message = 'Configuration is valid!';
-                if (data.warnings && data.warnings.length > 0) {
-                    message += '\\n\\nWarnings:\\n' + data.warnings.join('\\n');
-                    showModal('Validation Successful (with warnings)', message, [
-                        { text: 'OK', primary: true }
-                    ]);
+                if (data.success) {
+                    showToast('Configuration saved successfully!', 'success');
+                    this.markFormClean();
                 } else {
-                    showToast(message, 'success');
+                    showToast('Failed to save configuration: ' + data.error, 'error');
                 }
-            } else {
-                let message = 'Configuration has errors:\\n\\n' + data.errors.join('\\n');
-                if (data.warnings && data.warnings.length > 0) {
-                    message += '\\n\\nWarnings:\\n' + data.warnings.join('\\n');
-                }
-                showModal('Validation Failed', message, [
-                    { text: 'OK', primary: false }
-                ]);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showToast('Failed to validate configuration', 'error');
-        });
-    }
-
-    function toggleSection(sectionId) {
-        const section = document.getElementById(sectionId);
-        const button = document.querySelector(`[aria-controls="${sectionId}"]`);
-
-        if (!section || !button) {
-            console.error('Section or button not found:', sectionId);
-            return;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalContent;
+                showToast('Failed to save configuration', 'error');
+            });
         }
+    };
+}
 
-        const chevron = button.querySelector('.section-chevron');
-        const isExpanded = button.getAttribute('aria-expanded') === 'true';
+// Legacy functions for onclick handlers (for backward compatibility)
+function toggleSection(sectionId) {
+    const section = document.getElementById(sectionId);
+    const button = document.querySelector(`[aria-controls="${sectionId}"]`);
 
-        // Toggle visibility
-        if (isExpanded) {
-            section.classList.add('hidden');
-            button.setAttribute('aria-expanded', 'false');
-            if (chevron) chevron.style.transform = 'rotate(-90deg)';
-        } else {
-            section.classList.remove('hidden');
-            button.setAttribute('aria-expanded', 'true');
-            if (chevron) chevron.style.transform = 'rotate(0)';
-        }
+    if (!section || !button) return;
+
+    const chevron = button.querySelector('.section-chevron');
+    const isExpanded = button.getAttribute('aria-expanded') === 'true';
+
+    if (isExpanded) {
+        section.classList.add('hidden');
+        button.setAttribute('aria-expanded', 'false');
+        if (chevron) chevron.style.transform = 'rotate(-90deg)';
+    } else {
+        section.classList.remove('hidden');
+        button.setAttribute('aria-expanded', 'true');
+        if (chevron) chevron.style.transform = 'rotate(0)';
     }
+}
 
-    function addScanPath() {
-        const container = document.getElementById('scan-paths');
-        const div = document.createElement('div');
-        div.className = 'flex gap-2';
-        div.innerHTML = `
-            <input
-                type="text"
-                name="scan_paths[]"
-                required
-                placeholder="/mnt/user/data"
-                class="flex-1 px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 placeholder-dark-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                aria-label="Scan path">
-            <button
-                type="button"
-                onclick="removeField(this.parentElement)"
-                class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
-                aria-label="Remove path">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-            </button>
-        `;
-        container.appendChild(div);
-        div.querySelector('input').focus();
-        markFormDirty();
+function addScanPath() {
+    const alpineData = Alpine.$data(document.querySelector('[x-data]'));
+    alpineData.addFieldFromTemplate('scan-paths', 'scan-path-template');
+}
+
+function addExcludePattern() {
+    const alpineData = Alpine.$data(document.querySelector('[x-data]'));
+    alpineData.addFieldFromTemplate('exclude-patterns', 'exclude-pattern-template');
+}
+
+function addExcludePatternWithValue(value) {
+    const alpineData = Alpine.$data(document.querySelector('[x-data]'));
+    alpineData.addFieldFromTemplate('exclude-patterns', 'exclude-pattern-template');
+    const container = document.getElementById('exclude-patterns');
+    const lastInput = container.lastElementChild.querySelector('input');
+    if (lastInput) {
+        lastInput.value = value;
     }
+    showToast(`Added pattern: ${value}`, 'success');
+}
 
-    function addExcludePattern() {
-        const container = document.getElementById('exclude-patterns');
-        const div = document.createElement('div');
-        div.className = 'flex gap-2';
-        div.innerHTML = `
-            <input
-                type="text"
-                name="exclude_patterns[]"
-                placeholder="*.tmp"
-                class="flex-1 px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 placeholder-dark-500 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                aria-label="Exclude pattern">
-            <button
-                type="button"
-                onclick="removeField(this.parentElement)"
-                class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
-                aria-label="Remove pattern">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-            </button>
-        `;
-        container.appendChild(div);
-        div.querySelector('input').focus();
-        markFormDirty();
-    }
+function addPathPreference() {
+    const alpineData = Alpine.$data(document.querySelector('[x-data]'));
+    alpineData.addFieldFromTemplate('path-preferences', 'path-preference-template');
+}
 
-    function addExcludePatternWithValue(value) {
-        const container = document.getElementById('exclude-patterns');
-        const div = document.createElement('div');
-        div.className = 'flex gap-2';
-        div.innerHTML = `
-            <input
-                type="text"
-                name="exclude_patterns[]"
-                value="${value}"
-                class="flex-1 px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 placeholder-dark-500 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                aria-label="Exclude pattern">
-            <button
-                type="button"
-                onclick="removeField(this.parentElement)"
-                class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
-                aria-label="Remove pattern">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-            </button>
-        `;
-        container.appendChild(div);
-        showToast(`Added pattern: ${value}`, 'success');
-        markFormDirty();
-    }
-
-    function addPathPreference() {
-        const container = document.getElementById('path-preferences');
-        const div = document.createElement('div');
-        div.className = 'grid sm:grid-cols-[1fr_auto_auto] gap-2 items-start bg-dark-900/50 p-3 rounded-lg border border-dark-700';
-        div.innerHTML = `
-            <div>
-                <label class="block text-xs text-dark-400 uppercase tracking-wider mb-1">Pattern</label>
-                <input
-                    type="text"
-                    name="pref_pattern[]"
-                    required
-                    placeholder="/mnt/user/data/*"
-                    class="w-full px-3 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 placeholder-dark-500 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
-            </div>
-            <div>
-                <label class="block text-xs text-dark-400 uppercase tracking-wider mb-1">Priority</label>
-                <input
-                    type="number"
-                    name="pref_priority[]"
-                    required
-                    min="1"
-                    value="1"
-                    class="w-24 px-3 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
-            </div>
-            <div class="sm:pt-6">
-                <button
-                    type="button"
-                    onclick="removeField(this.closest('.grid'))"
-                    class="w-full sm:w-auto px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
-                    aria-label="Remove preference">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                </button>
-            </div>
-        `;
-        container.appendChild(div);
-        div.querySelector('input').focus();
-        markFormDirty();
-    }
-
-    function removeField(element) {
-        element.remove();
-        markFormDirty();
-    }
-
-    function saveConfig(event) {
-        event.preventDefault();
-
-        const form = event.target;
-        const formData = new FormData(form);
-
-        // Use event.submitter or fallback to finding the button
-        let submitBtn = event.submitter;
-        if (!submitBtn) {
-            submitBtn = form.querySelector('button[type="submit"]');
-        }
-
-        if (!submitBtn) {
-            console.error('Submit button not found in form');
-            showToast('Failed to save configuration', 'error');
-            return;
-        }
-
-        // Show loading state
-        const originalContent = submitBtn.innerHTML;
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span class="flex items-center justify-center gap-2"><svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Saving...</span>';
-
-        // Build config object
-        const config = {
-            scan_paths: formData.getAll('scan_paths[]').filter(v => v),
-            exclude_patterns: formData.getAll('exclude_patterns[]').filter(v => v),
-            path_preferences: [],
-            rmlint_options: {
-                algorithm: formData.get('algorithm')
-            },
-            safety: {
-                verify_after_hardlink: formData.get('verify_after_hardlink') === 'on',
-                keep_backups: formData.get('keep_backups') === 'on',
-                cross_disk_action: formData.get('cross_disk_action')
-            }
-        };
-
-        // Build path preferences
-        const patterns = formData.getAll('pref_pattern[]');
-        const priorities = formData.getAll('pref_priority[]');
-        for (let i = 0; i < patterns.length; i++) {
-            if (patterns[i]) {
-                config.path_preferences.push({
-                    pattern: patterns[i],
-                    priority: parseInt(priorities[i])
-                });
-            }
-        }
-
-        // Send to API
-        fetch('/api/config', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(config)
-        })
-        .then(response => response.json())
-        .then(data => {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalContent;
-
-            if (data.success) {
-                showToast('Configuration saved successfully!', 'success');
-                markFormClean(); // Hide action buttons after successful save
-            } else {
-                showToast('Failed to save configuration: ' + data.error, 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalContent;
-            showToast('Failed to save configuration', 'error');
-        });
-    }
+function removeField(element) {
+    element.remove();
+    const alpineData = Alpine.$data(document.querySelector('[x-data]'));
+    alpineData.markFormDirty();
+}
 </script>
+
+<style>
+/* Alpine.js cloak */
+[x-cloak] { display: none !important; }
+</style>
 {% endblock %}
