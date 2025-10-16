@@ -214,11 +214,8 @@ def cancel_scan() -> bool:
 # Initialize scheduler
 scheduler = ScanScheduler(scan_callback)
 
-# Log startup information (only once, not from every worker)
-if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':  # Avoid duplicate logs in dev mode
-    logger.info("Unraid Deduplication Manager initialized")
-    mode = 'production' if not os.environ.get('FLASK_DEBUG', 'False').lower() == 'true' else 'development'
-    logger.info("Running in %s mode", mode)
+# Note: Startup logging is handled by Gunicorn hooks in gunicorn.conf.py
+# This avoids duplicate log messages from each worker process
 
 
 # Routes

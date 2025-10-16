@@ -44,3 +44,17 @@ tmp_upload_dir = None
 # keyfile = None
 # certfile = None
 
+# Hooks for logging startup only once (from master process)
+def on_starting(server):
+    """Called just before the master process is initialized."""
+    import logging
+    logger = logging.getLogger('gunicorn.error')
+    logger.info("=" * 60)
+    logger.info("Unraid Deduplication Manager Starting")
+    logger.info(f"Workers: {server.cfg.workers}")
+    logger.info(f"Threads per worker: {server.cfg.threads}")
+    logger.info(f"Listening on: {server.cfg.bind}")
+    mode = os.environ.get('FLASK_DEBUG', 'False').lower()
+    logger.info(f"Mode: {'development' if mode == 'true' else 'production'}")
+    logger.info("=" * 60)
+
