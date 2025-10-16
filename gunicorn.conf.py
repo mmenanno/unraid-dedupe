@@ -14,9 +14,9 @@ bind = "0.0.0.0:5000"
 backlog = 2048
 
 # Worker processes
-# Use a reasonable number of workers (2-4 for most use cases)
+# Use one worker per CPU core for optimal performance
 # Can be overridden with GUNICORN_WORKERS environment variable
-workers = int(os.environ.get('GUNICORN_WORKERS', min(multiprocessing.cpu_count(), 4)))
+workers = int(os.environ.get('GUNICORN_WORKERS', multiprocessing.cpu_count()))
 worker_class = 'gthread'
 threads = int(os.environ.get('GUNICORN_THREADS', 2))
 worker_connections = 1000
