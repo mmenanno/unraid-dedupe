@@ -376,12 +376,67 @@ This was fixed in recent versions. If you see this error:
 
 MIT License - feel free to use and modify
 
+## Development
+
+### Local Setup
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/mmenanno/unraid-dedupe.git
+   cd unraid-dedupe
+   ```
+
+2. Install Python dependencies:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Build Tailwind CSS (required before running the app):
+
+   ```bash
+   ./build-css.sh
+   ```
+
+   This script will:
+   - Download the Tailwind standalone CLI for your platform (macOS/Linux)
+   - Generate the production CSS file from the Tailwind configuration
+   - Output to `app/static/tailwind.generated.css`
+
+   For development with auto-rebuild on file changes:
+
+   ```bash
+   ./build-css.sh --watch
+   ```
+
+4. Run the development server:
+
+   ```bash
+   cd app
+   python web_ui.py
+   ```
+
+5. Access the UI at `http://localhost:5000`
+
+### CSS Architecture
+
+The application uses Tailwind CSS for styling:
+
+- **Source**: `app/static/tailwind.src.css` - Contains Tailwind directives
+- **Config**: `tailwind.config.js` - Tailwind configuration with custom theme
+- **Generated**: `app/static/tailwind.generated.css` - Production CSS (auto-generated, not committed to git)
+- **Custom**: `app/static/style.css` - Additional custom styles and animations
+
+The Docker build process automatically generates the production CSS during the build.
+
 ## Contributing
 
 Pull requests welcome! Please ensure:
 
 - Code follows existing style
 - Comments for complex logic
+- Run `./build-css.sh` before committing if you modified templates or Tailwind config
 - Test on Unraid before submitting
 
 ## Support

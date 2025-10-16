@@ -25,3 +25,7 @@ data/
 .DS_Store
 Thumbs.db
 
+# Build artifacts
+.bin/
+app/static/tailwind.generated.css
+

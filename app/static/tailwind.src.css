@@ -1,0 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* This file is processed by Tailwind CLI to generate the final CSS */
+/* The generated output will be in app/static/tailwind.generated.css */
+

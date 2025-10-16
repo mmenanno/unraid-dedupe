@@ -25,7 +25,29 @@ RUN git clone https://github.com/sahib/rmlint.git /tmp/rmlint \
     && scons install --prefix=/usr/local \
     && ldconfig
 
-# Stage 2: Final runtime image
+# Stage 2: Build Tailwind CSS
+FROM alpine:latest AS tailwind-builder
+
+# Install curl to download Tailwind CLI
+RUN apk add --no-cache curl
+
+# Download Tailwind standalone CLI (Linux x64)
+RUN curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64 \
+    && chmod +x tailwindcss-linux-x64 \
+    && mv tailwindcss-linux-x64 /usr/local/bin/tailwindcss
+
+# Set working directory
+WORKDIR /build
+
+# Copy source files needed for Tailwind
+COPY tailwind.config.js .
+COPY app/static/tailwind.src.css ./app/static/
+COPY app/templates/ ./app/templates/
+
+# Build Tailwind CSS (minified for production)
+RUN tailwindcss -i ./app/static/tailwind.src.css -o ./app/static/tailwind.generated.css --minify
+
+# Stage 3: Final runtime image
 FROM python:3.11-slim
 
 # Install only runtime dependencies
@@ -50,6 +72,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ /app/
 COPY config/dedupe_config.yaml /app/config/dedupe_config.yaml
 COPY gunicorn.conf.py /app/gunicorn.conf.py
+COPY VERSION /app/VERSION
+
+# Copy generated Tailwind CSS from builder
+COPY --from=tailwind-builder /build/app/static/tailwind.generated.css /app/static/tailwind.generated.css
 
 # Create data directories with proper permissions
 RUN mkdir -p /data/config /data/reports /data/logs \

@@ -5,43 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Unraid Deduplication Manager{% endblock %}</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        primary: {
-                            50: '#eff6ff',
-                            100: '#dbeafe',
-                            200: '#bfdbfe',
-                            300: '#93c5fd',
-                            400: '#60a5fa',
-                            500: '#3b82f6',
-                            600: '#2563eb',
-                            700: '#1d4ed8',
-                            800: '#1e40af',
-                            900: '#1e3a8a',
-                        },
-                        dark: {
-                            50: '#f8fafc',
-                            100: '#f1f5f9',
-                            200: '#e2e8f0',
-                            300: '#cbd5e1',
-                            400: '#94a3b8',
-                            500: '#64748b',
-                            600: '#475569',
-                            700: '#334155',
-                            800: '#1e293b',
-                            900: '#0f172a',
-                            950: '#020617',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='tailwind.generated.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body class="bg-dark-900 text-dark-100 min-h-screen flex flex-col">
@@ -192,7 +156,7 @@
     <footer class="mt-auto bg-dark-800 border-t border-dark-700 py-6">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-dark-400 text-sm space-y-2">
             <div class="flex items-center justify-center gap-2">
-                <p>&copy; 2024 Unraid Deduplication Manager <span id="app-version" class="text-dark-500"></span></p>
+                <p>&copy; <span id="current-year">2024</span> Unraid Deduplication Manager <span id="app-version" class="text-dark-500">v1.0.0</span></p>
                 <span id="connection-status" class="flex items-center gap-1 text-xs" title="Connection status">
                     <span class="w-2 h-2 rounded-full bg-green-500" id="status-indicator"></span>
                     <span class="text-dark-500" id="status-text">Online</span>
@@ -460,8 +424,10 @@
                             <div class="space-y-2">
                                 <div class="flex items-center justify-between py-2 border-b border-dark-700">
                                     <span class="text-dark-300">Go to Dashboard</span>
-                                    <kbd class="px-2 py-1 bg-dark-900 rounded text-primary-400 font-mono text-sm">g</kbd>
-                                    <kbd class="px-2 py-1 bg-dark-900 rounded text-primary-400 font-mono text-sm">h</kbd>
+                                    <div class="flex items-center gap-1">
+                                        <kbd class="px-2 py-1 bg-dark-900 rounded text-primary-400 font-mono text-sm">g</kbd>
+                                        <kbd class="px-2 py-1 bg-dark-900 rounded text-primary-400 font-mono text-sm">h</kbd>
+                                    </div>
                                 </div>
                                 <div class="flex items-center justify-between py-2 border-b border-dark-700">
                                     <span class="text-dark-300">Go to Reports</span>
@@ -473,8 +439,10 @@
                                 </div>
                                 <div class="flex items-center justify-between py-2 border-b border-dark-700">
                                     <span class="text-dark-300">Go to Schedule</span>
-                                    <kbd class="px-2 py-1 bg-dark-900 rounded text-primary-400 font-mono text-sm">g</kbd>
-                                    <kbd class="px-2 py-1 bg-dark-900 rounded text-primary-400 font-mono text-sm">s</kbd>
+                                    <div class="flex items-center gap-1">
+                                        <kbd class="px-2 py-1 bg-dark-900 rounded text-primary-400 font-mono text-sm">g</kbd>
+                                        <kbd class="px-2 py-1 bg-dark-900 rounded text-primary-400 font-mono text-sm">s</kbd>
+                                    </div>
                                 </div>
                                 <div class="flex items-center justify-between py-2 border-b border-dark-700">
                                     <span class="text-dark-300">Go to Logs</span>
@@ -570,6 +538,12 @@
                 });
         }, 30000); // Check every 30 seconds
 
+        // Set current year
+        const yearEl = document.getElementById('current-year');
+        if (yearEl) {
+            yearEl.textContent = new Date().getFullYear();
+        }
+
         // Load version number
         fetch('/api/version')
             .then(response => response.json())
@@ -579,7 +553,10 @@
                     versionEl.textContent = `v${data.version}`;
                 }
             })
-            .catch(err => console.error('Failed to load version:', err));
+            .catch(err => {
+                console.error('Failed to load version:', err);
+                // Keep default version if fetch fails
+            });
 
         // Tooltip System
         let tooltipTimeout = null;
