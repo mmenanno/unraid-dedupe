@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}Configuration - Unraid Dedupe{% endblock %}
+
+{% block content %}
+<div class="config-page">
+    <h2>Configuration</h2>
+
+    <div class="card">
+        <form id="config-form" onsubmit="saveConfig(event)">
+            <h3>Scan Paths</h3>
+            <div id="scan-paths">
+                {% for path in config.scan_paths %}
+                <div class="input-group">
+                    <input type="text" name="scan_paths[]" value="{{ path }}" required>
+                    <button type="button" onclick="removeField(this)">Remove</button>
+                </div>
+                {% endfor %}
+            </div>
+            <button type="button" onclick="addScanPath()">Add Path</button>
+
+            <h3>Exclude Patterns</h3>
+            <div id="exclude-patterns">
+                {% for pattern in config.exclude_patterns %}
+                <div class="input-group">
+                    <input type="text" name="exclude_patterns[]" value="{{ pattern }}">
+                    <button type="button" onclick="removeField(this)">Remove</button>
+                </div>
+                {% endfor %}
+            </div>
+            <button type="button" onclick="addExcludePattern()">Add Pattern</button>
+
+            <h3>Path Preferences</h3>
+            <div id="path-preferences">
+                {% for pref in config.path_preferences %}
+                <div class="pref-group">
+                    <label>Pattern:</label>
+                    <input type="text" name="pref_pattern[]" value="{{ pref.pattern }}" required>
+                    <label>Priority:</label>
+                    <input type="number" name="pref_priority[]" value="{{ pref.priority }}" required>
+                    <button type="button" onclick="removeField(this.parentElement)">Remove</button>
+                </div>
+                {% endfor %}
+            </div>
+            <button type="button" onclick="addPathPreference()">Add Preference</button>
+
+            <h3>Rmlint Options</h3>
+            <div class="form-group">
+                <label for="algorithm">Algorithm:</label>
+                <select id="algorithm" name="algorithm">
+                    <option value="xxhash" {% if config.rmlint_options.algorithm == 'xxhash' %}selected{% endif %}>xxhash (fast)</option>
+                    <option value="sha256" {% if config.rmlint_options.algorithm == 'sha256' %}selected{% endif %}>sha256</option>
+                    <option value="sha512" {% if config.rmlint_options.algorithm == 'sha512' %}selected{% endif %}>sha512</option>
+                </select>
+            </div>
+
+            <h3>Safety Options</h3>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="verify_after_hardlink" {% if config.safety.verify_after_hardlink %}checked{% endif %}>
+                    Verify after hardlink
+                </label>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="keep_backups" {% if config.safety.keep_backups %}checked{% endif %}>
+                    Keep backups
+                </label>
+            </div>
+
+            <div class="actions">
+                <button type="submit" class="btn-primary">Save Configuration</button>
+                <button type="button" onclick="location.reload()" class="btn-secondary">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function addScanPath() {
+        const container = document.getElementById('scan-paths');
+        const div = document.createElement('div');
+        div.className = 'input-group';
+        div.innerHTML = `
+            <input type="text" name="scan_paths[]" required>
+            <button type="button" onclick="removeField(this)">Remove</button>
+        `;
+        container.appendChild(div);
+    }
+
+    function addExcludePattern() {
+        const container = document.getElementById('exclude-patterns');
+        const div = document.createElement('div');
+        div.className = 'input-group';
+        div.innerHTML = `
+            <input type="text" name="exclude_patterns[]">
+            <button type="button" onclick="removeField(this)">Remove</button>
+        `;
+        container.appendChild(div);
+    }
+
+    function addPathPreference() {
+        const container = document.getElementById('path-preferences');
+        const div = document.createElement('div');
+        div.className = 'pref-group';
+        div.innerHTML = `
+            <label>Pattern:</label>
+            <input type="text" name="pref_pattern[]" required>
+            <label>Priority:</label>
+            <input type="number" name="pref_priority[]" required>
+            <button type="button" onclick="removeField(this.parentElement)">Remove</button>
+        `;
+        container.appendChild(div);
+    }
+
+    function removeField(element) {
+        element.parentElement.remove();
+    }
+
+    function saveConfig(event) {
+        event.preventDefault();
+
+        const form = event.target;
+        const formData = new FormData(form);
+
+        // Build config object
+        const config = {
+            scan_paths: formData.getAll('scan_paths[]').filter(v => v),
+            exclude_patterns: formData.getAll('exclude_patterns[]').filter(v => v),
+            path_preferences: [],
+            rmlint_options: {
+                algorithm: formData.get('algorithm')
+            },
+            safety: {
+                verify_after_hardlink: formData.get('verify_after_hardlink') === 'on',
+                keep_backups: formData.get('keep_backups') === 'on'
+            }
+        };
+
+        // Build path preferences
+        const patterns = formData.getAll('pref_pattern[]');
+        const priorities = formData.getAll('pref_priority[]');
+        for (let i = 0; i < patterns.length; i++) {
+            if (patterns[i]) {
+                config.path_preferences.push({
+                    pattern: patterns[i],
+                    priority: parseInt(priorities[i])
+                });
+            }
+        }
+
+        // Send to API
+        fetch('/api/config', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(config)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Configuration saved successfully!');
+            } else {
+                alert('Failed to save configuration: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to save configuration');
+        });
+    }
+</script>
+{% endblock %}
+

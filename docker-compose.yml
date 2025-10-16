@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  dedupe-manager:
+    build: .
+    container_name: dedupe-manager
+    ports:
+      - "5000:5000"
+    volumes:
+      # Mount your Unraid shares here (adjust paths as needed)
+      # For development/testing, you can mount any directory
+      - /mnt:/mnt:ro  # Read-only access to data
+      - ./data:/data  # Local data directory for config, reports, logs
+    environment:
+      - PUID=99
+      - PGID=100
+      - FLASK_DEBUG=false
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+

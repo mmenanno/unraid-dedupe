@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Logs - Unraid Dedupe{% endblock %}
+
+{% block content %}
+<div class="logs-page">
+    <h2>Logs</h2>
+
+    <div class="card">
+        <div class="logs-controls">
+            <button onclick="refreshLogs()" class="btn-secondary">Refresh</button>
+            <label>
+                Lines to show:
+                <select id="lines-select" onchange="refreshLogs()">
+                    <option value="50">50</option>
+                    <option value="100" selected>100</option>
+                    <option value="200">200</option>
+                    <option value="500">500</option>
+                    <option value="1000">1000</option>
+                </select>
+            </label>
+        </div>
+
+        <div id="logs-container" class="logs-container">
+            <p class="loading">Loading logs...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function refreshLogs() {
+        const lines = document.getElementById('lines-select').value;
+        const container = document.getElementById('logs-container');
+
+        container.innerHTML = '<p class="loading">Loading logs...</p>';
+
+        fetch('/api/logs?lines=' + lines)
+            .then(response => response.json())
+            .then(data => {
+                if (data.logs && data.logs.length > 0) {
+                    const logsHtml = data.logs.map(line =>
+                        '<div class="log-line">' + escapeHtml(line) + '</div>'
+                    ).join('');
+                    container.innerHTML = logsHtml;
+                    container.scrollTop = container.scrollHeight;
+                } else {
+                    container.innerHTML = '<p>No logs available.</p>';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                container.innerHTML = '<p class="error">Failed to load logs.</p>';
+            });
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Auto-refresh every 5 seconds
+    setInterval(refreshLogs, 5000);
+
+    // Load logs on page load
+    document.addEventListener('DOMContentLoaded', refreshLogs);
+</script>
+{% endblock %}
+

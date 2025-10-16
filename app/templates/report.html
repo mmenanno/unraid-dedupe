@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Report {{ report_id }} - Unraid Dedupe{% endblock %}
+
+{% block content %}
+<div class="report-detail">
+    <h2>Report: {{ report_id }}</h2>
+
+    <div class="card">
+        <h3>Summary</h3>
+        <p><strong>Generated:</strong> {{ report.generated_at }}</p>
+
+        <div class="summary">
+            <div class="summary-item">
+                <span class="label">Total Duplicate Sets:</span>
+                <span class="value">{{ report.summary.total_sets }}</span>
+            </div>
+            <div class="summary-item">
+                <span class="label">Same-Disk Duplicates:</span>
+                <span class="value">{{ report.summary.same_disk_sets }}</span>
+            </div>
+            <div class="summary-item">
+                <span class="label">Same-Disk Space:</span>
+                <span class="value">{{ (report.summary.same_disk_space / 1024 / 1024 / 1024) | round(2) }} GB</span>
+            </div>
+            <div class="summary-item">
+                <span class="label">Cross-Disk Duplicates:</span>
+                <span class="value">{{ report.summary.cross_disk_sets }}</span>
+            </div>
+            <div class="summary-item">
+                <span class="label">Cross-Disk Space:</span>
+                <span class="value">{{ (report.summary.cross_disk_space / 1024 / 1024 / 1024) | round(2) }} GB</span>
+            </div>
+            <div class="summary-item">
+                <span class="label">Manual Review Needed:</span>
+                <span class="value">{{ report.summary.manual_review_sets }}</span>
+            </div>
+            <div class="summary-item">
+                <span class="label">Total Space Reclaimable:</span>
+                <span class="value">{{ (report.summary.total_reclaimable / 1024 / 1024 / 1024) | round(2) }} GB</span>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button onclick="executeReport()" class="btn-primary">Execute Deduplication</button>
+            <a href="/api/reports/{{ report_id }}/download/json" class="btn-secondary">Download JSON</a>
+            <a href="/api/reports/{{ report_id }}/download/markdown" class="btn-secondary">Download Markdown</a>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Duplicate Sets (First 50)</h3>
+        <div id="duplicate-sets">
+            {% for ds in report.duplicate_sets[:50] %}
+            <div class="duplicate-set">
+                <h4>Set {{ loop.index }}: {{ ds.hash[:12]}}... ({{ (ds.size / 1024 / 1024) | round(2) }} MB) - {{ ds.action }}</h4>
+                <p><strong>Keeper:</strong> <code>{{ ds.keeper.path if ds.keeper else 'N/A' }}</code></p>
+                <p><strong>Duplicates:</strong></p>
+                <ul>
+                {% for file in ds.files %}
+                    {% if not ds.keeper or file.path != ds.keeper.path %}
+                    <li><code>{{ file.path }}</code> ({{ file.disk or 'unknown' }})</li>
+                    {% endif %}
+                {% endfor %}
+                </ul>
+            </div>
+            {% endfor %}
+
+            {% if report.duplicate_sets | length > 50 %}
+            <p class="note">Showing first 50 of {{ report.duplicate_sets | length }} sets. Download full report for complete details.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function executeReport() {
+        if (!confirm('Are you sure you want to execute this deduplication? This will modify files on your system.')) {
+            return;
+        }
+
+        fetch('/api/reports/{{ report_id }}/execute', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Deduplication completed!\n\n' +
+                        'Processed: ' + data.stats.processed + '\n' +
+                        'Succeeded: ' + data.stats.succeeded + '\n' +
+                        'Failed: ' + data.stats.failed + '\n' +
+                        'Skipped: ' + data.stats.skipped + '\n' +
+                        'Space Freed: ' + (data.stats.space_freed / 1024 / 1024 / 1024).toFixed(2) + ' GB');
+                } else {
+                    alert('Execution failed: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to execute deduplication');
+            });
+    }
+</script>
+{% endblock %}
+

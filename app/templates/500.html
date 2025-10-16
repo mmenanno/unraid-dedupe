@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}500 Server Error - Unraid Dedupe{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <div class="card">
+        <h2>500 - Server Error</h2>
+        <p>Something went wrong on our end. Please try again later.</p>
+        <p>Check the <a href="/logs">logs</a> for more information.</p>
+        <a href="/" class="btn-primary">Go to Dashboard</a>
+    </div>
+</div>
+{% endblock %}
+

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - Unraid Dedupe{% endblock %}
+
+{% block content %}
+<div class="reports-page">
+    <h2>Reports</h2>
+
+    <div class="card">
+        <div id="reports-list">
+            <p class="loading">Loading reports...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function loadReports() {
+        fetch('/api/reports')
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('reports-list');
+
+                if (data.reports.length === 0) {
+                    container.innerHTML = '<p>No reports available.</p>';
+                    return;
+                }
+
+                let html = '<table class="reports-table"><thead><tr>' +
+                    '<th>Report ID</th>' +
+                    '<th>Generated At</th>' +
+                    '<th>Total Sets</th>' +
+                    '<th>Space Reclaimable</th>' +
+                    '<th>Actions</th>' +
+                    '</tr></thead><tbody>';
+
+                data.reports.forEach(report => {
+                    const spaceGB = (report.summary.total_reclaimable / 1024 / 1024 / 1024).toFixed(2);
+                    html += `<tr>
+                        <td>${report.id}</td>
+                        <td>${new Date(report.generated_at).toLocaleString()}</td>
+                        <td>${report.summary.total_sets}</td>
+                        <td>${spaceGB} GB</td>
+                        <td><a href="/reports/${report.id}" class="btn-link">View</a></td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('reports-list').innerHTML = '<p class="error">Failed to load reports.</p>';
+            });
+    }
+
+    document.addEventListener('DOMContentLoaded', loadReports);
+</script>
+{% endblock %}
+

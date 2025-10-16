@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Unraid Deduplication Manager{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <h1>Unraid Dedupe</h1>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="/" class="{% if request.path == '/' %}active{% endif %}">Dashboard</a></li>
+                <li><a href="/reports" class="{% if request.path.startswith('/reports') %}active{% endif %}">Reports</a></li>
+                <li><a href="/config" class="{% if request.path == '/config' %}active{% endif %}">Config</a></li>
+                <li><a href="/schedule" class="{% if request.path == '/schedule' %}active{% endif %}">Schedule</a></li>
+                <li><a href="/logs" class="{% if request.path == '/logs' %}active{% endif %}">Logs</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 Unraid Deduplication Manager</p>
+        </div>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
+

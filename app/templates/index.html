@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Unraid Dedupe{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <h2>Dashboard</h2>
+
+    <!-- Scan Control -->
+    <div class="card">
+        <h3>Scan Control</h3>
+        <div id="scan-status" class="status-message">
+            {% if scan_running %}
+            <p class="status-running">Scan in progress...</p>
+            {% else %}
+            <p class="status-idle">Idle</p>
+            {% endif %}
+        </div>
+        <button id="start-scan-btn" onclick="startScan()" {% if scan_running %}disabled{% endif %}>
+            Start Scan
+        </button>
+        <div id="scan-progress" style="display: none;">
+            <div class="progress-bar">
+                <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
+            </div>
+            <p id="progress-message">Starting...</p>
+        </div>
+    </div>
+
+    <!-- Schedule Info -->
+    <div class="card">
+        <h3>Schedule Status</h3>
+        {% if schedule_config.enabled %}
+        <p class="status-enabled">✓ Scheduled scans enabled</p>
+        <p><strong>Schedule:</strong> {{ schedule_config.description }}</p>
+        {% if schedule_config.next_run %}
+        <p><strong>Next run:</strong> {{ schedule_config.next_run }}</p>
+        {% endif %}
+        {% else %}
+        <p class="status-disabled">⨯ Scheduled scans disabled</p>
+        <p><a href="/schedule">Configure schedule</a></p>
+        {% endif %}
+    </div>
+
+    <!-- Latest Report -->
+    <div class="card">
+        <h3>Latest Report</h3>
+        {% if latest_report %}
+        <p><strong>Generated:</strong> {{ latest_report.generated_at }}</p>
+        <div class="summary">
+            <div class="summary-item">
+                <span class="label">Total Sets:</span>
+                <span class="value">{{ latest_report.summary.total_sets }}</span>
+            </div>
+            <div class="summary-item">
+                <span class="label">Same-Disk:</span>
+                <span class="value">{{ latest_report.summary.same_disk_sets }}</span>
+            </div>
+            <div class="summary-item">
+                <span class="label">Cross-Disk:</span>
+                <span class="value">{{ latest_report.summary.cross_disk_sets }}</span>
+            </div>
+            <div class="summary-item">
+                <span class="label">Manual Review:</span>
+                <span class="value">{{ latest_report.summary.manual_review_sets }}</span>
+            </div>
+            <div class="summary-item">
+                <span class="label">Space Reclaimable:</span>
+                <span class="value">{{ (latest_report.summary.total_reclaimable / 1024 / 1024 / 1024) | round(2) }} GB</span>
+            </div>
+        </div>
+        <a href="/reports/{{ latest_report.id }}" class="btn-link">View Full Report</a>
+        {% else %}
+        <p>No reports available. Start a scan to generate your first report.</p>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let scanCheckInterval = null;
+
+    function startScan() {
+        fetch('/api/scan/start', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('scan-progress').style.display = 'block';
+                    document.getElementById('start-scan-btn').disabled = true;
+                    startScanStatusCheck();
+                } else {
+                    alert('Failed to start scan: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to start scan');
+            });
+    }
+
+    function startScanStatusCheck() {
+        if (scanCheckInterval) {
+            clearInterval(scanCheckInterval);
+        }
+
+        scanCheckInterval = setInterval(() => {
+            fetch('/api/scan/status')
+                .then(response => response.json())
+                .then(data => {
+                    updateScanStatus(data);
+
+                    if (!data.running && scanCheckInterval) {
+                        clearInterval(scanCheckInterval);
+                        scanCheckInterval = null;
+
+                        // Reload page after scan completes
+                        if (data.report_id) {
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 2000);
+                        }
+                    }
+                })
+                .catch(error => console.error('Error checking scan status:', error));
+        }, 2000);
+    }
+
+    function updateScanStatus(status) {
+        const statusDiv = document.getElementById('scan-status');
+        const progressFill = document.getElementById('progress-fill');
+        const progressMessage = document.getElementById('progress-message');
+
+        if (status.running) {
+            statusDiv.innerHTML = '<p class="status-running">' + status.message + '</p>';
+            progressFill.style.width = status.progress + '%';
+            progressMessage.textContent = status.message;
+        } else {
+            statusDiv.innerHTML = '<p class="status-idle">Idle</p>';
+            document.getElementById('start-scan-btn').disabled = false;
+        }
+    }
+
+    // Check if scan is running on page load
+    {% if scan_running %}
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('scan-progress').style.display = 'block';
+        startScanStatusCheck();
+    });
+    {% endif %}
+</script>
+{% endblock %}
+

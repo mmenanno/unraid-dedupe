@@ -1,0 +1,21 @@
+scan_paths:
+  - /mnt/user/data
+
+exclude_patterns:
+  - "*.tmp"
+  - "*/.Trash-*"
+  - "*/System Volume Information/*"
+
+path_preferences:
+  - pattern: "/mnt/user/data/media/*"
+    priority: 1
+  - pattern: "/mnt/user/data/downloads/*"
+    priority: 2
+
+rmlint_options:
+  algorithm: "xxhash"
+
+safety:
+  verify_after_hardlink: true
+  keep_backups: false
+

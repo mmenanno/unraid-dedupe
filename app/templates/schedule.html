@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}Schedule - Unraid Dedupe{% endblock %}
+
+{% block content %}
+<div class="schedule-page">
+    <h2>Scan Schedule</h2>
+
+    <div class="card">
+        <h3>Current Schedule</h3>
+        <p><strong>Status:</strong>
+            {% if config.enabled %}
+            <span class="status-enabled">Enabled</span>
+            {% else %}
+            <span class="status-disabled">Disabled</span>
+            {% endif %}
+        </p>
+        {% if config.enabled %}
+        <p><strong>Schedule:</strong> {{ config.description }}</p>
+        <p><strong>Cron Expression:</strong> <code>{{ config.cron }}</code></p>
+        {% if config.next_run %}
+        <p><strong>Next Run:</strong> {{ config.next_run }}</p>
+        {% endif %}
+        {% endif %}
+
+        <button onclick="triggerNow()" class="btn-secondary">Trigger Scan Now</button>
+    </div>
+
+    <div class="card">
+        <h3>Configure Schedule</h3>
+        <form id="schedule-form" onsubmit="saveSchedule(event)">
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="enabled" name="enabled" {% if config.enabled %}checked{% endif %}>
+                    Enable scheduled scans
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label for="preset">Preset Schedule:</label>
+                <select id="preset" onchange="applyPreset()">
+                    <option value="">-- Select a preset --</option>
+                    {% for name, expr in presets.items() %}
+                    <option value="{{ expr }}">{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="cron">Cron Expression:</label>
+                <input type="text" id="cron" name="cron" value="{{ config.cron }}" required>
+                <small>Format: minute hour day month day_of_week (e.g., "0 2 * * 0" for Sunday at 2 AM)</small>
+            </div>
+
+            <div class="form-group">
+                <label for="description">Description:</label>
+                <input type="text" id="description" name="description" value="{{ config.description }}">
+            </div>
+
+            <div class="actions">
+                <button type="submit" class="btn-primary">Save Schedule</button>
+                <button type="button" onclick="location.reload()" class="btn-secondary">Cancel</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>Cron Expression Help</h3>
+        <p>A cron expression consists of 5 fields:</p>
+        <pre>minute hour day month day_of_week</pre>
+        <ul>
+            <li><strong>minute:</strong> 0-59</li>
+            <li><strong>hour:</strong> 0-23</li>
+            <li><strong>day:</strong> 1-31</li>
+            <li><strong>month:</strong> 1-12</li>
+            <li><strong>day_of_week:</strong> 0-6 (0=Sunday)</li>
+        </ul>
+        <p>Special characters:</p>
+        <ul>
+            <li><strong>*</strong> - any value</li>
+            <li><strong>*/n</strong> - every n units</li>
+            <li><strong>n-m</strong> - range from n to m</li>
+            <li><strong>n,m</strong> - values n and m</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function applyPreset() {
+        const preset = document.getElementById('preset').value;
+        if (preset) {
+            document.getElementById('cron').value = preset;
+        }
+    }
+
+    function saveSchedule(event) {
+        event.preventDefault();
+
+        const form = event.target;
+        const formData = new FormData(form);
+
+        const config = {
+            enabled: formData.get('enabled') === 'on',
+            cron: formData.get('cron'),
+            description: formData.get('description')
+        };
+
+        fetch('/api/schedule', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(config)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Schedule saved successfully!');
+                location.reload();
+            } else {
+                alert('Failed to save schedule: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to save schedule');
+        });
+    }
+
+    function triggerNow() {
+        if (confirm('Trigger a scan now?')) {
+            fetch('/api/schedule/trigger', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Scan triggered! Check the dashboard for progress.');
+                        window.location.href = '/';
+                    } else {
+                        alert('Failed to trigger scan');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Failed to trigger scan');
+                });
+        }
+    }
+</script>
+{% endblock %}
+
