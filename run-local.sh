@@ -39,11 +39,9 @@ if [ -z "$SECRET_KEY" ]; then
     export SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 fi
 
-# Set Flask debug mode for local development
+# Set Flask configuration for local development
+export FLASK_APP=web_ui.py
 export FLASK_DEBUG=true
-
-# Set Flask port for local development (avoid AirPlay conflict on macOS)
-export FLASK_RUN_PORT=5001
 
 # Change to app directory and run
 cd app || exit 1
