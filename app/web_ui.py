@@ -19,6 +19,7 @@ from flask_limiter.util import get_remote_address
 
 from dedupe_manager import DedupeManager
 from scheduler import ScanScheduler, get_cron_presets
+from scan_state import SharedScanState
 
 
 # Configure paths from environment variables
@@ -145,73 +146,16 @@ limiter = Limiter(
 )
 
 
-class ScanStatus:
-    """Encapsulates scan status state with thread safety"""
-    def __init__(self):
-        self._lock = threading.Lock()
-        self.running = False
-        self.progress = 0
-        self.message = 'Idle'
-        self.report_id = None
-        self.cancel_requested = False
-
-    def to_dict(self):
-        """Convert to dictionary for JSON responses"""
-        with self._lock:
-            return {
-                'running': self.running,
-                'progress': self.progress,
-                'message': self.message,
-                'report_id': self.report_id,
-                'cancel_requested': self.cancel_requested
-            }
-
-    def reset(self):
-        """Reset to initial state"""
-        with self._lock:
-            self.running = False
-            self.progress = 0
-            self.message = 'Idle'
-            self.report_id = None
-            self.cancel_requested = False
-
-    def request_cancel(self):
-        """Request scan cancellation"""
-        with self._lock:
-            self.cancel_requested = True
-            logger.info("Scan cancellation requested")
-
-    def is_cancel_requested(self):
-        """Check if cancellation has been requested"""
-        with self._lock:
-            return self.cancel_requested
-
-    def set_running(self, running):
-        """Thread-safe setter for running state"""
-        with self._lock:
-            self.running = running
-
-    def set_progress(self, progress, message):
-        """Thread-safe setter for progress"""
-        with self._lock:
-            self.progress = progress
-            self.message = message
-
-    def set_report_id(self, report_id):
-        """Thread-safe setter for report_id"""
-        with self._lock:
-            self.report_id = report_id
-
-    def get_running(self):
-        """Thread-safe getter for running state"""
-        with self._lock:
-            return self.running
+# Scan status is now managed via SharedScanState (file-based)
+# This allows status to persist across Gunicorn worker processes
 
 
 # Global state with thread safety
 manager = DedupeManager()
 scheduler = None
-scan_status = ScanStatus()
+# Use file-based shared state that works across Gunicorn workers
+scan_state_file = os.path.join(DATA_DIR, 'scan_state.json')
+scan_status = SharedScanState(scan_state_file)
 scan_lock = threading.Lock()
 
 
@@ -225,22 +169,14 @@ def trigger_scan() -> bool:
     """Trigger a scan in background thread"""
     global scan_status
 
-    if not scan_lock.acquire(blocking=False):
-        logger.warning("Scan already running")
-        return False
-
-    if scan_status.get_running():
-        scan_lock.release()
+    # Try to acquire scan lock using file-based locking
+    if not scan_status.acquire_scan_lock():
         logger.warning("Scan already running")
         return False
 
     def run_scan():
         global scan_status
         try:
-            scan_status.reset()  # Reset status including cancel flag
-            scan_status.set_running(True)
-            scan_status.set_progress(0, 'Starting scan...')
-
             logger.info("Starting deduplication scan")
 
             def update_progress(percent: int, message: str):
@@ -267,8 +203,7 @@ def trigger_scan() -> bool:
             scan_status.set_progress(0, f'Scan failed: {str(e)}')
 
         finally:
-            scan_status.set_running(False)
-            scan_lock.release()
+            scan_status.release_scan_lock()
 
     thread = threading.Thread(target=run_scan, daemon=False)
     thread.start()
@@ -279,7 +214,7 @@ def cancel_scan() -> bool:
     """Request cancellation of running scan"""
     global scan_status
 
-    if not scan_status.get_running():
+    if not scan_status.is_running():
         logger.warning("No scan running to cancel")
         return False
 
@@ -306,7 +241,7 @@ def index():
         'index.html',
         latest_report=latest_report,
         schedule_config=schedule_config,
-        scan_running=scan_status.get_running()
+        scan_running=scan_status.is_running()
     )
 
 
