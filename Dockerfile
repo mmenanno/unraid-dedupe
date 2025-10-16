@@ -31,7 +31,7 @@ FROM debian:bullseye-slim AS tailwind-builder
 # Install curl to download Tailwind CLI
 RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib/apt/lists/*
 
-# Download Tailwind standalone CLI (Linux x64)
+# Download Tailwind standalone CLI (latest)
 RUN curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64 \
     && chmod +x tailwindcss-linux-x64 \
     && mv tailwindcss-linux-x64 /usr/local/bin/tailwindcss
@@ -39,8 +39,7 @@ RUN curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/downlo
 # Set working directory
 WORKDIR /build
 
-# Copy source files needed for Tailwind
-COPY tailwind.config.js .
+# Copy source files needed for Tailwind v4 (CSS-first configuration)
 COPY app/static/tailwind.src.css ./app/static/
 COPY app/templates/ ./app/templates/
 

@@ -40,7 +40,7 @@ TAILWIND_PATH=".bin/tailwindcss"
 
 # Download Tailwind CLI if not present
 if [ ! -f "$TAILWIND_PATH" ]; then
-    echo "Downloading Tailwind CSS standalone CLI..."
+    echo "Downloading Tailwind CSS standalone CLI (latest)..."
     curl -sL "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/${TAILWIND_BINARY}" -o "$TAILWIND_PATH"
     chmod +x "$TAILWIND_PATH"
     echo "Tailwind CLI downloaded successfully!"
