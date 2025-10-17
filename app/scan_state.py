@@ -52,7 +52,8 @@ class SharedScanState:
             'report_id': None,
             'cancel_requested': False,
             'started_at': None,
-            'updated_at': None
+            'updated_at': None,
+            'process_pid': None
         }
 
     def _read_state(self) -> Dict[str, Any]:
@@ -145,12 +146,42 @@ class SharedScanState:
         state['report_id'] = report_id
         self._write_state(state)
 
+    def set_process_pid(self, pid: Optional[int]) -> None:
+        """Set the PID of the running scan process"""
+        state = self._read_state()
+        state['process_pid'] = pid
+        self._write_state(state)
+        if pid:
+            logger.info(f"Scan process PID set to {pid}")
+
+    def get_process_pid(self) -> Optional[int]:
+        """Get the PID of the running scan process"""
+        state = self._read_state()
+        return state.get('process_pid')
+
     def request_cancel(self) -> None:
-        """Request scan cancellation"""
+        """Request scan cancellation and signal the process if running"""
+        import signal
+
         state = self._read_state()
         state['cancel_requested'] = True
+        process_pid = state.get('process_pid')
         self._write_state(state)
+
         logger.info("Scan cancellation requested")
+
+        # If we have a process PID, send SIGTERM directly for immediate cancellation
+        if process_pid:
+            try:
+                logger.info(f"Sending SIGTERM to scan process PID {process_pid}")
+                os.kill(process_pid, signal.SIGTERM)
+                logger.info(f"Successfully sent SIGTERM to PID {process_pid}")
+            except ProcessLookupError:
+                logger.warning(f"Process {process_pid} not found (may have already exited)")
+            except PermissionError:
+                logger.error(f"Permission denied to signal process {process_pid}")
+            except Exception as e:
+                logger.error(f"Failed to signal process {process_pid}: {e}")
 
     def is_cancel_requested(self) -> bool:
         """Check if cancellation has been requested"""
@@ -207,5 +238,7 @@ class SharedScanState:
         """Release the scan lock (scan completed or failed)"""
         state = self._read_state()
         state['running'] = False
+        state['process_pid'] = None  # Clear the PID
         self._write_state(state)
+        logger.info("Scan lock released (scan ended)")
 

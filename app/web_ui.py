@@ -175,9 +175,11 @@ def trigger_scan() -> bool:
                 # Check for cancellation
                 if scan_status.is_cancel_requested():
                     raise InterruptedError("Scan cancelled by user")
-                scan_status.set_progress(percent, message)
+                # Only update progress if message is provided (skip periodic cancellation checks)
+                if message is not None:
+                    scan_status.set_progress(percent, message)
 
-            report_id = manager.scan(progress_callback=update_progress)
+            report_id = manager.scan(progress_callback=update_progress, scan_state=scan_status)
 
             if scan_status.is_cancel_requested():
                 scan_status.set_progress(0, 'Scan cancelled')

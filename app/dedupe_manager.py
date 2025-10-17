@@ -176,12 +176,13 @@ class RmlintScanner:
     def __init__(self, config: DedupeConfig):
         self.config = config
 
-    def scan(self, output_path: str = None, progress_callback=None) -> bool:
+    def scan(self, output_path: str = None, progress_callback=None, scan_state=None) -> bool:
         """Run rmlint scan and save results
 
         Args:
             output_path: Where to save the JSON output
             progress_callback: Optional callback function(progress: int, message: str) for progress updates
+            scan_state: Optional SharedScanState instance for storing process PID
 
         Returns:
             True if successful, False otherwise
@@ -228,17 +229,51 @@ class RmlintScanner:
                 bufsize=1
             )
 
+            # Store the process PID in shared state for signal-based cancellation
+            if scan_state:
+                scan_state.set_process_pid(process.pid)
+
             stderr_output = []
             last_output_time = time.time()
             last_heartbeat_time = time.time()
+            last_cancel_check_time = time.time()
             heartbeat_interval = 30  # Log heartbeat every 30 seconds
+            cancel_check_interval = 1  # Check for cancellation every 1 second
 
             while True:
                 line = process.stderr.readline()
+
+                # Check if process has terminated
                 if not line and process.poll() is not None:
+                    # Process ended - check if it was due to cancellation
+                    if progress_callback:
+                        try:
+                            progress_callback(-1, None)
+                        except InterruptedError:
+                            # Cancellation was requested - this is expected
+                            logger.info("rmlint process terminated (cancellation requested)")
+                            raise
                     break
 
                 current_time = time.time()
+
+                # Check for cancellation more frequently (every second)
+                # This is a backup - the primary cancellation is now via SIGTERM
+                if progress_callback and current_time - last_cancel_check_time >= cancel_check_interval:
+                    try:
+                        # This will raise InterruptedError if cancelled
+                        progress_callback(-1, None)
+                    except InterruptedError:
+                        logger.info("Cancellation detected in poll loop, terminating rmlint process")
+                        process.terminate()
+                        try:
+                            process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            logger.warning("rmlint did not terminate gracefully, forcing kill")
+                            process.kill()
+                            process.wait(timeout=5)
+                        raise
+                    last_cancel_check_time = current_time
 
                 # Log heartbeat if no output for a while
                 if current_time - last_heartbeat_time >= heartbeat_interval:
@@ -295,6 +330,10 @@ class RmlintScanner:
         except Exception as e:
             logger.error("rmlint scan failed: %s", e)
             return False
+        finally:
+            # Clear the process PID from shared state
+            if scan_state:
+                scan_state.set_process_pid(None)
 
     def _parse_rmlint_progress(self, line: str) -> Optional[Dict]:
         """Parse rmlint output to extract progress information
@@ -841,12 +880,13 @@ class DedupeManager:
         self.config.config = self.config._load_config()
         logger.info("Configuration reloaded")
 
-    def scan(self, report_id: Optional[str] = None, progress_callback=None) -> str:
+    def scan(self, report_id: Optional[str] = None, progress_callback=None, scan_state=None) -> str:
         """Run complete scan and generate reports
 
         Args:
             report_id: Optional custom report ID
             progress_callback: Optional callback(progress: int, message: str) for progress updates
+            scan_state: Optional SharedScanState instance for storing process PID
 
         Returns:
             Report ID string
@@ -861,7 +901,7 @@ class DedupeManager:
         report_json = os.path.join(report_dir, 'report.json')
         report_md = os.path.join(report_dir, 'report.md')
 
-        if not self.scanner.scan(scan_json, progress_callback=progress_callback):
+        if not self.scanner.scan(scan_json, progress_callback=progress_callback, scan_state=scan_state):
             raise Exception("Scan failed")
 
         if progress_callback:
