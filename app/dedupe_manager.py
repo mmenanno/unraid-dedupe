@@ -5,16 +5,17 @@ Core logic for scanning, analyzing, and executing deduplication operations.
 """
 
 import json
+import logging
 import os
 import re
 import shutil
 import subprocess
 import sys
+import time
 from collections import defaultdict
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from typing import List, Dict, Optional
-import logging
 
 import yaml
 
@@ -209,10 +210,14 @@ class RmlintScanner:
             f'--algorithm={algorithm}',
             f'--output=json:{output_path}',
             '--progress',
-            '--no-hidden'
+            '-vvv'  # Verbose output (can use -v, -vv, or -vvv for increasing verbosity)
         ])
 
         logger.info("Running rmlint: %s", ' '.join(cmd))
+        logger.info("Scanning paths: %s", ', '.join(scan_paths))
+
+        if progress_callback:
+            progress_callback(0, "Starting scan...")
 
         try:
             process = subprocess.Popen(
@@ -224,14 +229,34 @@ class RmlintScanner:
             )
 
             stderr_output = []
+            last_output_time = time.time()
+            last_heartbeat_time = time.time()
+            heartbeat_interval = 30  # Log heartbeat every 30 seconds
+
             while True:
                 line = process.stderr.readline()
                 if not line and process.poll() is not None:
                     break
 
+                current_time = time.time()
+
+                # Log heartbeat if no output for a while
+                if current_time - last_heartbeat_time >= heartbeat_interval:
+                    elapsed = int(current_time - last_output_time)
+                    if elapsed >= heartbeat_interval:
+                        logger.info("rmlint still running (no output for %d seconds)...", elapsed)
+                        if progress_callback:
+                            progress_callback(-1, f"Still scanning... (no output for {elapsed}s)")
+                    last_heartbeat_time = current_time
+
                 if line:
                     stderr_output.append(line)
                     line_stripped = line.strip()
+                    last_output_time = current_time
+                    last_heartbeat_time = current_time
+
+                    # Log raw output for debugging
+                    logger.debug("rmlint output: %s", line_stripped)
 
                     if progress_callback:
                         progress_info = self._parse_rmlint_progress(line_stripped)
@@ -276,9 +301,19 @@ class RmlintScanner:
 
         Returns dict with 'percent' and 'message' keys, or None if no progress info
         """
+        # Directory traversal phase
         if "Traversing" in line or "traversing" in line:
-            return {'percent': 10, 'message': 'Scanning directories...'}
+            return {'percent': 5, 'message': 'Traversing directory tree...'}
 
+        # Building file tree
+        if "Building" in line or "building" in line:
+            return {'percent': 8, 'message': 'Building file index...'}
+
+        # Reading/scanning phase
+        if "Reading" in line or "reading" in line:
+            return {'percent': 12, 'message': 'Reading file metadata...'}
+
+        # File processing with progress numbers
         if "/" in line and "files" in line.lower():
             try:
                 match = re.search(r'(\d+)\s*/\s*(\d+)', line)
@@ -286,19 +321,59 @@ class RmlintScanner:
                     current = int(match.group(1))
                     total = int(match.group(2))
                     if total > 0:
-                        percent = min(90, int((current / total) * 80) + 10)  # 10-90%
-                        return {'percent': percent, 'message': f'Processing files ({current}/{total})...'}
+                        percent = min(85, int((current / total) * 70) + 15)  # 15-85%
+                        return {'percent': percent, 'message': f'Processing files ({current:,}/{total:,})...'}
             except (ValueError, ZeroDivisionError):
                 pass
 
-        if "preprocessing" in line.lower():
+        # File counts without progress
+        if "files" in line.lower() and any(word in line.lower() for word in ["found", "processed", "scanning"]):
+            try:
+                match = re.search(r'(\d+)\s+files?', line)
+                if match:
+                    file_count = int(match.group(1))
+                    return {'percent': 15, 'message': f'Found {file_count:,} files...'}
+            except ValueError:
+                pass
+
+        # Preprocessing/filtering phase
+        if "preprocessing" in line.lower() or "filtering" in line.lower():
             return {'percent': 20, 'message': 'Preprocessing files...'}
-        if "hashing" in line.lower() or "hash" in line.lower():
+
+        # Size grouping
+        if "grouping" in line.lower() or "sorting" in line.lower():
+            return {'percent': 25, 'message': 'Grouping files by size...'}
+
+        # Hashing phase (most time-consuming)
+        if any(word in line.lower() for word in ["hashing", "hash", "checksum", "checksumming"]):
+            # Try to extract percentage from the line itself
+            percent_match = re.search(r'(\d+)%', line)
+            if percent_match:
+                raw_percent = int(percent_match.group(1))
+                # Map rmlint's percentage to our 30-80% range
+                percent = int(30 + (raw_percent / 100.0 * 50))
+                return {'percent': percent, 'message': f'Computing checksums ({raw_percent}%)...'}
             return {'percent': 50, 'message': 'Computing checksums...'}
-        if "matching" in line.lower() or "finding" in line.lower():
-            return {'percent': 80, 'message': 'Finding duplicates...'}
-        if "==> In total" in line or "total" in line.lower():
+
+        # Matching/comparing phase
+        if "matching" in line.lower() or "comparing" in line.lower():
+            return {'percent': 82, 'message': 'Comparing files for duplicates...'}
+
+        # Finding duplicates
+        if "finding" in line.lower() and "duplicate" in line.lower():
+            return {'percent': 85, 'message': 'Finding duplicates...'}
+
+        # Writing output
+        if "writing" in line.lower() or "output" in line.lower():
+            return {'percent': 90, 'message': 'Writing results...'}
+
+        # Final summary
+        if "==> In total" in line or "in total" in line.lower():
             return {'percent': 95, 'message': 'Finalizing results...'}
+
+        # Statistics/summary
+        if any(word in line.lower() for word in ["duplicates", "duplicate files"]) and any(word in line.lower() for word in ["found", "total"]):
+            return {'percent': 97, 'message': 'Generating summary...'}
 
         return None
 
