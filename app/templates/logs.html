@@ -191,16 +191,34 @@
     }
 
     function getLogColorClass(line) {
+        // Match log level patterns more precisely to avoid false positives
+        // Look for log levels as separate words or in brackets/parentheses
         const lowerLine = line.toLowerCase();
-        if (lowerLine.includes('error') || lowerLine.includes('fail')) {
+
+        // Match ERROR or FAIL as separate words (not in URLs)
+        if (/\b(error|fail|failed)\b/.test(lowerLine) && !/sources=error/.test(lowerLine)) {
             return 'text-red-400';
-        } else if (lowerLine.includes('warning') || lowerLine.includes('warn')) {
+        }
+        // Match WARNING or WARN
+        else if (/\b(warning|warn)\b/.test(lowerLine)) {
             return 'text-yellow-400';
-        } else if (lowerLine.includes('success') || lowerLine.includes('complete')) {
+        }
+        // Match SUCCESS or COMPLETE
+        else if (/\b(success|complete|completed)\b/.test(lowerLine)) {
             return 'text-green-400';
-        } else if (lowerLine.includes('info')) {
+        }
+        // Match INFO
+        else if (/\[info\]|\binfo\b/i.test(lowerLine)) {
             return 'text-blue-400';
         }
+        // HTTP status codes
+        else if (/ (4\d{2}|5\d{2}) /.test(line)) {
+            return 'text-red-400'; // 4xx and 5xx errors
+        }
+        else if (/ (2\d{2}|3\d{2}) /.test(line)) {
+            return 'text-green-400'; // 2xx and 3xx success
+        }
+
         return 'text-dark-300';
     }
 
