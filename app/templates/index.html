@@ -3,7 +3,7 @@
 {% block title %}Dashboard - Unraid Dedupe{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6" data-scan-running="{{ 'true' if scan_running else 'false' }}">
     <div class="flex items-center justify-between">
         <h2 class="text-3xl font-bold text-dark-50">Dashboard</h2>
     </div>
@@ -87,6 +87,19 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                     Cancel Scan
+                </span>
+            </button>
+            <button
+                id="reset-scan-btn"
+                onclick="resetScanState()"
+                class="hidden px-6 py-2.5 bg-yellow-600 hover:bg-yellow-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 focus:ring-offset-dark-800"
+                aria-label="Reset stuck scan state"
+                title="Reset scan state if it appears stuck">
+                <span class="flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Reset State
                 </span>
             </button>
         </div>
@@ -352,6 +365,35 @@
         ]);
     }
 
+    function resetScanState() {
+        showModal('Reset Scan State?', 'This will reset the scan state if it appears stuck. Use this only if a scan is not actually running but the UI thinks it is.', [
+            {
+                text: 'Cancel',
+                primary: false
+            },
+            {
+                text: 'Reset State',
+                danger: true,
+                onClick: () => {
+                    fetch('/api/scan/reset', { method: 'POST' })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                showToast('Scan state reset successfully', 'success');
+                                setTimeout(() => window.location.reload(), 500);
+                            } else {
+                                showToast('Failed to reset scan state: ' + data.message, 'error');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            showToast('Failed to reset scan state', 'error');
+                        });
+                }
+            }
+        ]);
+    }
+
     function startScanStatusCheck() {
         if (scanCheckInterval) {
             clearInterval(scanCheckInterval);
@@ -390,6 +432,7 @@
         const progressMessage = document.getElementById('progress-message');
         const startBtn = document.getElementById('start-scan-btn');
         const cancelBtn = document.getElementById('cancel-scan-btn');
+        const resetBtn = document.getElementById('reset-scan-btn');
 
         if (status.running) {
             statusDiv.innerHTML = `
@@ -405,6 +448,15 @@
             progressFill.setAttribute('aria-valuenow', status.progress);
             progressPercentage.textContent = Math.round(status.progress) + '%';
             progressMessage.textContent = status.message;
+
+            // Show reset button if scan appears stuck (same progress for a while)
+            const now = Date.now();
+            if (!window.lastProgress || window.lastProgress.value !== status.progress) {
+                window.lastProgress = { value: status.progress, time: now };
+                resetBtn.classList.add('hidden');
+            } else if (now - window.lastProgress.time > 300000) { // 5 minutes
+                resetBtn.classList.remove('hidden');
+            }
         } else {
             statusDiv.innerHTML = `
                 <div class="flex items-center gap-2 px-4 py-2 bg-dark-700/50 border border-dark-600 rounded-lg text-dark-400 text-sm font-medium">
@@ -415,17 +467,28 @@
             startBtn.disabled = false;
             startBtn.innerHTML = '<span class="flex items-center gap-2"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>Start Scan</span>';
             cancelBtn.classList.add('hidden');
+            resetBtn.classList.add('hidden');
+            window.lastProgress = null;
         }
     }
 
     // Check if scan is running on page load
-    {% if scan_running %}
     document.addEventListener('DOMContentLoaded', () => {
-        document.getElementById('scan-progress').classList.remove('hidden');
-        document.getElementById('cancel-scan-btn').classList.remove('hidden');
-        startScanStatusCheck();
+        // Check data attribute set by server-side template
+        const container = document.querySelector('.space-y-6');
+        const scanRunning = container.getAttribute('data-scan-running') === 'true';
+
+        if (scanRunning) {
+            document.getElementById('scan-progress').classList.remove('hidden');
+            document.getElementById('cancel-scan-btn').classList.remove('hidden');
+            startScanStatusCheck();
+        }
+
+        // Load data on page load
+        loadRecentActivity();
+        loadTotalStats();
+        checkOnboarding();
     });
-    {% endif %}
 
     // Load recent activity
     function loadRecentActivity() {
@@ -628,11 +691,5 @@
         }
     }
 
-    // Load on page load
-    document.addEventListener('DOMContentLoaded', () => {
-        loadRecentActivity();
-        loadTotalStats();
-        checkOnboarding();
-    });
 </script>
 {% endblock %}

@@ -33,17 +33,26 @@ os.makedirs(CONFIG_DIR, exist_ok=True)
 os.makedirs(REPORTS_DIR, exist_ok=True)
 os.makedirs(LOGS_DIR, exist_ok=True)
 
-# Configure logging with worker process ID
-import multiprocessing
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [Worker-%(process)d] %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(os.path.join(LOGS_DIR, 'web_ui.log')),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+# Configure logging to work with Gunicorn
+# When running under Gunicorn, use its logger; otherwise set up our own
+if __name__ != '__main__':
+    # Running under Gunicorn - use gunicorn's logger
+    gunicorn_logger = logging.getLogger('gunicorn.error')
+    logger = logging.getLogger(__name__)
+    logger.handlers = gunicorn_logger.handlers
+    logger.setLevel(gunicorn_logger.level)
+else:
+    # Running standalone (development)
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(os.path.join(LOGS_DIR, 'web_ui.log')),
+            logging.StreamHandler()
+        ]
+    )
+    logger = logging.getLogger(__name__)
+    logger.info("Using standalone logging configuration")
 
 # Reduce verbosity of noisy libraries
 logging.getLogger('apscheduler').setLevel(logging.WARNING)
@@ -271,6 +280,19 @@ def cancel_scan_endpoint() -> Tuple[Response, int]:
         return jsonify({'success': False, 'message': 'No scan running'}), 400
 
 
+@app.route('/api/scan/reset', methods=['POST'])
+@limiter.limit("10 per hour")
+def reset_scan_endpoint() -> Tuple[Response, int]:
+    """Reset scan state (for stuck scans)"""
+    try:
+        scan_status.reset()
+        logger.info("Scan state manually reset")
+        return jsonify({'success': True, 'message': 'Scan state reset successfully'}), 200
+    except Exception as e:
+        logger.error(f"Failed to reset scan state: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/api/reports')
 def list_reports() -> Tuple[Response, int]:
     """List all reports with pagination support"""
@@ -391,36 +413,47 @@ def logs_page():
 
 @app.route('/api/logs')
 def get_logs() -> Tuple[Response, int]:
-    """Get recent logs"""
-    log_file = os.path.join(LOGS_DIR, 'web_ui.log')
+    """Get recent logs from all log files"""
     lines = request.args.get('lines', 100, type=int)
     lines = min(lines, 10000)
 
-    if not os.path.exists(log_file):
-        return jsonify({'logs': []})
+    # Try multiple log sources
+    log_files = [
+        os.path.join(LOGS_DIR, 'web_ui.log'),
+        os.path.join(LOGS_DIR, 'error.log'),
+        os.path.join(LOGS_DIR, 'access.log')
+    ]
 
-    try:
-        import subprocess
-        result = subprocess.run(
-            ['tail', '-n', str(lines), log_file],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        if result.returncode == 0:
-            recent_lines = result.stdout.splitlines(keepends=True)
-            return jsonify({'logs': recent_lines})
-        else:
+    all_logs = []
+
+    for log_file in log_files:
+        if not os.path.exists(log_file):
+            continue
+
+        try:
+            # Check if file is empty
+            if os.path.getsize(log_file) == 0:
+                continue
+
+            # Read file directly (more reliable than subprocess)
             with open(log_file, 'r') as f:
-                all_lines = f.readlines()
-                recent_lines = all_lines[-lines:]
-                return jsonify({'logs': recent_lines})
-    except subprocess.TimeoutExpired:
-        logger.error("Timeout reading logs")
-        return jsonify({'error': 'Timeout reading logs'}), 500
-    except Exception as e:
-        logger.error("Failed to read logs: %s", e)
-        return jsonify({'error': str(e)}), 500
+                file_lines = f.readlines()
+                # Get last N lines
+                all_logs.extend(file_lines[-lines:])
+
+        except Exception as e:
+            logger.error(f"Failed to read log file {log_file}: {e}")
+            continue
+
+    if not all_logs:
+        # Return empty array with a helpful message in the response
+        return jsonify({'logs': [], 'message': 'No logs available yet. Logs will appear here when operations are performed.'}), 200
+
+    # Sort by timestamp if possible, otherwise keep order
+    # Take the most recent lines across all files
+    recent_logs = all_logs[-lines:] if len(all_logs) > lines else all_logs
+
+    return jsonify({'logs': recent_logs}), 200
 
 
 @app.route('/config')

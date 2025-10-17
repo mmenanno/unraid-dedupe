@@ -14,7 +14,19 @@ from typing import Optional, Dict, Any
 from filelock import FileLock
 
 
-logger = logging.getLogger(__name__)
+# Configure logging - use Gunicorn's logger if available
+try:
+    gunicorn_logger = logging.getLogger('gunicorn.error')
+    if gunicorn_logger.handlers:
+        logger = logging.getLogger(__name__)
+        logger.handlers = gunicorn_logger.handlers
+        logger.setLevel(gunicorn_logger.level)
+    else:
+        raise AttributeError("No gunicorn logger")
+except (AttributeError, KeyError):
+    # Fallback to basic config if not running under Gunicorn
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
 
 
 class SharedScanState:
@@ -59,7 +71,7 @@ class SharedScanState:
         Returns:
             Current state dictionary
         """
-        lock = FileLock(self.lock_file, timeout=5)
+        lock = FileLock(self.lock_file, timeout=10)
         try:
             with lock:
                 if not os.path.exists(self.state_file):
@@ -68,14 +80,15 @@ class SharedScanState:
                 with open(self.state_file, 'r') as f:
                     state = json.load(f)
 
-                # Check for stale state (running for more than 2 hours without update)
+                # Check for stale state (running for more than 24 hours without update)
+                # Large scans can take many hours, so we use a generous timeout
                 if state.get('running'):
                     updated_at = state.get('updated_at')
                     if updated_at:
                         try:
                             updated_time = datetime.fromisoformat(updated_at)
                             age_seconds = (datetime.now() - updated_time).total_seconds()
-                            if age_seconds > 7200:  # 2 hours
+                            if age_seconds > 86400:  # 24 hours
                                 logger.warning(f"Detected stale scan state (age: {age_seconds}s), resetting")
                                 state = self._get_default_state()
                                 self._write_state_unlocked(state)
@@ -104,7 +117,7 @@ class SharedScanState:
         Args:
             state: State dictionary to write
         """
-        lock = FileLock(self.lock_file, timeout=5)
+        lock = FileLock(self.lock_file, timeout=10)
         try:
             with lock:
                 self._write_state_unlocked(state)
@@ -173,10 +186,16 @@ class SharedScanState:
         Returns:
             True if lock was acquired, False if scan already running
         """
-        lock = FileLock(self.lock_file, timeout=5)
+        lock = FileLock(self.lock_file, timeout=10)
         try:
             with lock:
-                state = self._read_state()
+                # Read state directly without calling _read_state to avoid recursive locking
+                if not os.path.exists(self.state_file):
+                    state = self._get_default_state()
+                else:
+                    with open(self.state_file, 'r') as f:
+                        state = json.load(f)
+
                 if state.get('running', False):
                     return False
 

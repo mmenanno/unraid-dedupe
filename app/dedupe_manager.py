@@ -27,12 +27,22 @@ REPORTS_DIR = os.path.join(DATA_DIR, 'reports')
 LOGS_DIR = os.path.join(DATA_DIR, 'logs')
 
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Configure logging - use Gunicorn's logger if available
+try:
+    gunicorn_logger = logging.getLogger('gunicorn.error')
+    if gunicorn_logger.handlers:
+        logger = logging.getLogger(__name__)
+        logger.handlers = gunicorn_logger.handlers
+        logger.setLevel(gunicorn_logger.level)
+    else:
+        raise AttributeError("No gunicorn logger")
+except (AttributeError, KeyError):
+    # Fallback to basic config if not running under Gunicorn
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    logger = logging.getLogger(__name__)
 
 
 # Action type constants
