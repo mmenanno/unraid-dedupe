@@ -42,6 +42,9 @@ class SharedScanState:
         # Initialize state file if it doesn't exist
         if not os.path.exists(self.state_file):
             self._write_state(self._get_default_state())
+        else:
+            # Check for stale state on startup (process was killed by restart)
+            self._clean_stale_state_on_startup()
 
     def _get_default_state(self) -> Dict[str, Any]:
         """Get default initial state"""
@@ -55,6 +58,51 @@ class SharedScanState:
             'updated_at': None,
             'process_pid': None
         }
+
+    def _clean_stale_state_on_startup(self) -> None:
+        """
+        Clean up stale state on app startup.
+        If a scan was running before restart, the process is now dead.
+        """
+        lock = FileLock(self.lock_file, timeout=10)
+        try:
+            with lock:
+                if not os.path.exists(self.state_file):
+                    return
+
+                with open(self.state_file, 'r') as f:
+                    state = json.load(f)
+
+                # Check if state indicates a scan is running
+                if not state.get('running'):
+                    return
+
+                process_pid = state.get('process_pid')
+
+                # Check if the process actually exists
+                process_exists = False
+                if process_pid:
+                    try:
+                        # Send signal 0 to check if process exists (doesn't actually send a signal)
+                        os.kill(process_pid, 0)
+                        process_exists = True
+                    except (ProcessLookupError, PermissionError):
+                        process_exists = False
+
+                if not process_exists:
+                    # Process is dead but state shows running - clear stale state
+                    logger.warning(
+                        f"Detected stale scan state on startup (PID {process_pid} not running). "
+                        "Clearing state. This is normal after an app restart."
+                    )
+                    state = self._get_default_state()
+                    state['message'] = 'Ready (cleared stale state from previous run)'
+                    self._write_state_unlocked(state)
+                else:
+                    logger.info(f"Scan process PID {process_pid} is still running (unlikely after restart)")
+
+        except Exception as e:
+            logger.error(f"Failed to clean stale state on startup: {e}")
 
     def _read_state(self) -> Dict[str, Any]:
         """
