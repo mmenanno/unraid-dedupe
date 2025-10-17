@@ -13,20 +13,11 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from filelock import FileLock
 
+from logging_config import get_logger
 
-# Configure logging - use Gunicorn's logger if available
-try:
-    gunicorn_logger = logging.getLogger('gunicorn.error')
-    if gunicorn_logger.handlers:
-        logger = logging.getLogger(__name__)
-        logger.handlers = gunicorn_logger.handlers
-        logger.setLevel(gunicorn_logger.level)
-    else:
-        raise AttributeError("No gunicorn logger")
-except (AttributeError, KeyError):
-    # Fallback to basic config if not running under Gunicorn
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
+
+# Configure logging using shared utility
+logger = get_logger(__name__)
 
 
 class SharedScanState:

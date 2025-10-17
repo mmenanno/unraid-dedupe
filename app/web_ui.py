@@ -20,6 +20,7 @@ from flask_limiter.util import get_remote_address
 from dedupe_manager import DedupeManager
 from scheduler import ScanScheduler, get_cron_presets
 from scan_state import SharedScanState
+from logging_config import get_logger
 
 
 # Configure paths from environment variables
@@ -33,26 +34,8 @@ os.makedirs(CONFIG_DIR, exist_ok=True)
 os.makedirs(REPORTS_DIR, exist_ok=True)
 os.makedirs(LOGS_DIR, exist_ok=True)
 
-# Configure logging to work with Gunicorn
-# When running under Gunicorn, use its logger; otherwise set up our own
-if __name__ != '__main__':
-    # Running under Gunicorn - use gunicorn's logger
-    gunicorn_logger = logging.getLogger('gunicorn.error')
-    logger = logging.getLogger(__name__)
-    logger.handlers = gunicorn_logger.handlers
-    logger.setLevel(gunicorn_logger.level)
-else:
-    # Running standalone (development)
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(os.path.join(LOGS_DIR, 'web_ui.log')),
-            logging.StreamHandler()
-        ]
-    )
-    logger = logging.getLogger(__name__)
-    logger.info("Using standalone logging configuration")
+# Configure logging using shared utility
+logger = get_logger(__name__)
 
 # Reduce verbosity of noisy libraries
 logging.getLogger('apscheduler').setLevel(logging.WARNING)
@@ -413,20 +396,28 @@ def logs_page():
 
 @app.route('/api/logs')
 def get_logs() -> Tuple[Response, int]:
-    """Get recent logs from all log files"""
+    """Get recent logs from selected log files"""
     lines = request.args.get('lines', 100, type=int)
     lines = min(lines, 10000)
 
-    # Try multiple log sources
-    log_files = [
-        os.path.join(LOGS_DIR, 'web_ui.log'),
-        os.path.join(LOGS_DIR, 'error.log'),
-        os.path.join(LOGS_DIR, 'access.log')
-    ]
+    # Get which log sources to include (comma-separated)
+    sources = request.args.get('sources', 'error', type=str)
+    source_list = [s.strip() for s in sources.split(',')]
+
+    # Map source names to file paths
+    available_sources = {
+        'error': os.path.join(LOGS_DIR, 'error.log'),
+        'access': os.path.join(LOGS_DIR, 'access.log'),
+    }
 
     all_logs = []
 
-    for log_file in log_files:
+    for source_name in source_list:
+        if source_name not in available_sources:
+            continue
+
+        log_file = available_sources[source_name]
+
         if not os.path.exists(log_file):
             continue
 

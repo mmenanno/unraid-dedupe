@@ -32,18 +32,34 @@
                     <span id="auto-refresh-text">Auto-refresh: ON</span>
                 </button>
 
-                <div class="flex items-center gap-2 ml-auto">
-                    <label for="lines-select" class="text-sm text-dark-400">Lines:</label>
-                    <select
-                        id="lines-select"
-                        onchange="refreshLogs()"
-                        class="px-3 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all cursor-pointer">
-                        <option value="50">50</option>
-                        <option value="100" selected>100</option>
-                        <option value="200">200</option>
-                        <option value="500">500</option>
-                        <option value="1000">1000</option>
-                    </select>
+                <div class="flex items-center gap-4 ml-auto flex-wrap">
+                    <div class="flex items-center gap-3">
+                        <span class="text-sm text-dark-400">Sources:</span>
+                        <label class="flex items-center gap-1.5 cursor-pointer text-sm text-dark-300 hover:text-dark-100 transition-colors">
+                            <input type="checkbox" id="source-error" checked onchange="refreshLogs()"
+                                   class="w-4 h-4 rounded border-dark-600 bg-dark-800 text-primary-600 focus:ring-2 focus:ring-primary-500 focus:ring-offset-dark-900 cursor-pointer">
+                            <span>Application</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 cursor-pointer text-sm text-dark-300 hover:text-dark-100 transition-colors">
+                            <input type="checkbox" id="source-access" onchange="refreshLogs()"
+                                   class="w-4 h-4 rounded border-dark-600 bg-dark-800 text-primary-600 focus:ring-2 focus:ring-primary-500 focus:ring-offset-dark-900 cursor-pointer">
+                            <span>Access</span>
+                        </label>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <label for="lines-select" class="text-sm text-dark-400">Lines:</label>
+                        <select
+                            id="lines-select"
+                            onchange="refreshLogs()"
+                            class="px-3 py-2 bg-dark-900 border border-dark-700 rounded-lg text-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all cursor-pointer">
+                            <option value="50">50</option>
+                            <option value="100" selected>100</option>
+                            <option value="200">200</option>
+                            <option value="500">500</option>
+                            <option value="1000">1000</option>
+                        </select>
+                    </div>
                 </div>
             </div>
         </div>
@@ -91,6 +107,27 @@
         const container = document.getElementById('logs-container');
         const wasAtBottom = isScrolledToBottom(container);
 
+        // Get selected log sources
+        const sources = [];
+        if (document.getElementById('source-error').checked) sources.push('error');
+        if (document.getElementById('source-access').checked) sources.push('access');
+
+        // If no sources selected, show error
+        if (sources.length === 0) {
+            container.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-12 text-center">
+                    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-yellow-900/30 mb-4">
+                        <svg class="w-8 h-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-semibold text-yellow-400 mb-2">No Log Sources Selected</h3>
+                    <p class="text-dark-400">Please select at least one log source to view.</p>
+                </div>
+            `;
+            return;
+        }
+
         // Don't show loading if we're just refreshing
         if (!container.querySelector('.log-line')) {
             container.innerHTML = `
@@ -106,7 +143,7 @@
             `;
         }
 
-        fetch('/api/logs?lines=' + lines)
+        fetch('/api/logs?lines=' + lines + '&sources=' + sources.join(','))
             .then(response => response.json())
             .then(data => {
                 if (data.logs && data.logs.length > 0) {
