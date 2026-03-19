@@ -5,6 +5,6 @@ APScheduler==3.11.2
 croniter==6.2.2
 rich==14.3.3
 Werkzeug==3.1.6
-gunicorn==23.0.0
+gunicorn==25.1.0
 filelock==3.25.2
 
